@@ -52,7 +52,7 @@ The **Vision Assistance App** is designed to help individuals who are completely
 ## 📌 Future Enhancements
 - 🌍 Multi-language support.
 - 🎵 Dynamic sound cues for navigation.
-- 🦾 Integration with smart wearables (e.g., smartwatches).
+- 🦾 Integration with smart wearables (e.g., neosapien).
 - 🗂️ Cloud-based object recognition for improved AI training.
 
 ## 🏗️ Installation & Setup
