@@ -4,7 +4,7 @@ This app is designed to help individuals who are completely or heavily partially
 
 -----MAIN---------------------------------------------Need to make it as fast as possible----------------------------------------------
 ### **Object Detection & Distance Feedback**
-- Uses the mobile device’s camera to detect objects.
+- Uses the mobile device’s camera to detect objects.(cars, traffic lights, poles buildings , people)
 - Divides the field of view into 9 quadrants (3x3 grid) to indicate object location.keeps giving these features every time interval , also ehenever the data changes
 - Estimates object distance using phone vibration motors (intensity-based feedback).
 - Provides haptic feedback for better interaction.
@@ -15,7 +15,8 @@ This app is designed to help individuals who are completely or heavily partially
 - 9 buttons mapped to the 9 quadrants on the screen:
   1. **Describe Object in Detail** – Initially provides a short description; pressing gives more information.
   2. **Call Emergency Contact** – Quickly calls a preset number (family member, caretaker, etc.).
-  3-9. Additional customizable buttons for features like:
+  3. read the text from a book or a copy
+  4-9. Additional customizable buttons for features like:
      - Voice command activation.
      - Saving an object’s details for later reference.
      - Adjusting vibration intensity or sensitivity.
