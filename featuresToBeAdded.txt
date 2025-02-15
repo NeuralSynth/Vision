@@ -2,7 +2,7 @@
 
 This app is designed to help individuals who are completely or heavily partially blind navigate the real world without external aid.
 
------MAIN-------------------------------------------------------------------------------------------------------------------------------
+-----MAIN---------------------------------------------Need to make it as fast as possible----------------------------------------------
 ### **Object Detection & Distance Feedback**
 - Uses the mobile device’s camera to detect objects.
 - Divides the field of view into 9 quadrants (3x3 grid) to indicate object location.keeps giving these features every time interval , also ehenever the data changes
