@@ -12,16 +12,14 @@ This app is designed to help individuals who are completely or heavily partially
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 ### **Interactive Buttons & Controls**
-- 9 buttons mapped to the 9 quadrants on the screen:
+- 4 buttons mapped on the screen:
+settings btn on top small
   1. **Describe Object in Detail** – Initially provides a short description; pressing gives more information.
-  2. **Call Emergency Contact** – Quickly calls a preset number (family member, caretaker, etc.).
+  2. speaker on/off
   3. read the text from a book or a copy
-  4-9. Additional customizable buttons for features like:
-     - Voice command activation.
-     - Saving an object’s details for later reference.
-     - Adjusting vibration intensity or sensitivity.
-     - Enabling/disabling certain features.
-- Utilizes volume and power button combinations for quick access to essential features.
+  4.  **Call Emergency Contact** – Quickly calls a preset number (family member, caretaker, etc.).
+ 
+- can Utilize volume and power button combinations for quick access to essential features.
 
 ### **Accident Detection & Emergency Alerts**
 - Integrated GPS functionality for navigation and location tracking.
