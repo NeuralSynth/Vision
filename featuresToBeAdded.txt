@@ -2,12 +2,14 @@
 
 This app is designed to help individuals who are completely or heavily partially blind navigate the real world without external aid.
 
+-----MAIN-------------------------------------------------------------------------------------------------------------------------------
 ### **Object Detection & Distance Feedback**
 - Uses the mobile device’s camera to detect objects.
-- Divides the field of view into 9 quadrants (3x3 grid) to indicate object location.
+- Divides the field of view into 9 quadrants (3x3 grid) to indicate object location.keeps giving these features every time interval , also ehenever the data changes
 - Estimates object distance using phone vibration motors (intensity-based feedback).
 - Provides haptic feedback for better interaction.
 - Recognizes household items and human faces accurately.
+----------------------------------------------------------------------------------------------------------------------------------------
 
 ### **Interactive Buttons & Controls**
 - 9 buttons mapped to the 9 quadrants on the screen:
