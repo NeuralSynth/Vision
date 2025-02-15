@@ -5,7 +5,7 @@ This app is designed to help individuals who are completely or heavily partially
 -----MAIN---------------------------------------------Need to make it as fast as possible----------------------------------------------
 ### **Object Detection & Distance Feedback**
 - Uses the mobile device’s camera to detect objects.(cars, traffic lights, poles buildings , people)
-- Divides the field of view into 9 quadrants (3x3 grid) to indicate object location.keeps giving these features every time interval , also ehenever the data changes
+- Divides the field of view into 9 quadrants (3x3 grid) to indicate object location.keeps giving these features every time interval , also whenever the data changes (initially also display details on screen)
 - Estimates object distance using phone vibration motors (intensity-based feedback).
 - Provides haptic feedback for better interaction.
 - Recognizes household items and human faces accurately.
