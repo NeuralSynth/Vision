@@ -1,7 +1,8 @@
-flask==2.0.1
-flask-cors==3.0.10
+setuptools==59.6.0
+six==1.16.0
+wheel==0.37.1
 numpy==1.21.0
 opencv-python-headless==4.5.3.56
-setuptools>=65.5.1
-six>=1.16.0
+flask==2.0.1
+flask-cors==3.0.10
 urllib3==1.26.7 
