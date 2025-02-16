@@ -1,22 +1,20 @@
 [build]
   command = """
-    python -m pip install --upgrade pip setuptools wheel
+    python -m pip install --upgrade pip
     pip install -r requirements.txt --no-cache-dir
     mkdir -p src/config
-    wget https://github.com/patrick013/Object-Detection---Yolov3/raw/master/model/yolov3.weights -O src/config/yolov3.weights
+    wget https://pjreddie.com/media/files/yolov3.weights -O src/config/yolov3.weights || wget https://github.com/patrick013/Object-Detection---Yolov3/raw/master/model/yolov3.weights -O src/config/yolov3.weights
   """
   publish = "build"
 
 [build.environment]
-  PYTHON_VERSION = "3.9"
+  PYTHON_VERSION = "3.8.12"
   PIP_DISABLE_PIP_VERSION_CHECK = "1"
   PYTHONUNBUFFERED = "1"
-  PYTHONPATH = "src"
-  OPENCV_VERSION = "4.5.3.56"
 
 [[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/:splat"
+  from = "/*"
+  to = "/index.html"
   status = 200
 
 [[headers]]
