@@ -1,5 +1,8 @@
 [build]
   command = """
+    source ~/.nvm/nvm.sh
+    nvm install 16
+    nvm use 16
     python -m pip install --upgrade pip
     pip install -r requirements.txt --no-cache-dir
     mkdir -p src/config
@@ -9,6 +12,8 @@
 
 [build.environment]
   PYTHON_VERSION = "3.8.12"
+  NODE_VERSION = "16"
+  NPM_VERSION = "8"
   PIP_DISABLE_PIP_VERSION_CHECK = "1"
   PYTHONUNBUFFERED = "1"
 
