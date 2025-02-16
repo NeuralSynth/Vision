@@ -1,2 +1,13 @@
 # Ignore YOLO weights
-*.weights 
+*.weights
+__pycache__/
+*.pyc
+.env
+.venv
+env/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+.DS_Store 

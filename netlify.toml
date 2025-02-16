@@ -1,3 +1,21 @@
 [build]
-  command = "wget https://pjreddie.com/media/files/yolov3.weights -O src/config/yolov3.weights && your-build-command"
-  publish = "build"  # or whatever your publish directory is 
+  command = """
+    pip install -r requirements.txt
+    python -m pip install --upgrade pip
+    wget https://github.com/patrick013/Object-Detection---Yolov3/raw/master/model/yolov3.weights -O src/config/yolov3.weights
+  """
+  publish = "build"
+
+[build.environment]
+  PYTHON_VERSION = "3.9"
+  PIP_DISABLE_PIP_VERSION_CHECK = "1"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[[headers]]
+  for = "/*"
+    [headers.values]
+    Access-Control-Allow-Origin = "*" 
