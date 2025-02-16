@@ -1,63 +1,74 @@
-# React + Vite
+# Vision Assistance App
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Overview
+The **Vision Assistance App** is designed to empower individuals who are completely or heavily partially blind by helping them navigate the real world independently. Leveraging AI-powered object detection, haptic feedback, and emergency features, the app enhances accessibility and safety.
 
-Currently, two official plugins are available:
+---
+## ✨ Key Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### 🔍 Object Detection & Distance Feedback
+- Uses the mobile device’s camera to detect objects in real-time.
+- Divides the field of view into a **9-quadrant grid (3x3)** for precise object localization.
+- Estimates object distance and provides **intensity-based haptic feedback**.
+- Recognizes common household items and human faces accurately.
 
-Vision Assistance App
-📝 Overview
-The Vision Assistance App is designed to help individuals who are completely or heavily partially blind navigate the real world independently. It utilizes AI-powered object detection, haptic feedback, and emergency features to enhance accessibility and safety.
+### 🎛 Interactive Controls
+- **On-Screen Buttons:**
+  - **Describe Object in Detail:** Short description on tap, detailed info on long press.
+  - **Call Emergency Contact:** Quick dial to a preset contact (family, caretaker, etc.).
+  - **Customizable Buttons:**
+    - Voice commands 🎙
+    - Saving object details for later reference 📝
+    - Adjusting vibration intensity ⚙
+    - Toggling features on/off 📴
+  - **Physical Button Shortcuts:** Volume and power button combinations for quick actions.
 
-✨ Features
-🔍 Object Detection & Distance Feedback
-Uses the mobile device’s camera to detect objects in real-time.
-Divides the field of view into 9 quadrants (3x3 grid) to indicate object location.
-Estimates object distance using vibration motors (intensity-based feedback).
-Provides haptic feedback for better interaction.
-Recognizes household items and human faces accurately.
-🎛 Interactive Buttons & Controls
-9 on-screen buttons mapped to the 9 quadrants:
-📝 Describe Object in Detail – Short description first, detailed info on press.
-📞 Call Emergency Contact – Quick dial to a preset number (family, caretaker, etc.). 3-9. 🎛 Additional customizable buttons for:
-Voice commands 🎙.
-Saving object details for later reference.
-Adjusting vibration intensity ⚙.
-Toggling features on/off 📴.
-Physical button shortcuts using volume and power button combinations.
-🚨 Accident Detection & Emergency Alerts
-GPS functionality for navigation and location tracking.
-Fall detection that automatically sends emergency alerts 📡.
-Health info storage at startup for medical emergencies 🏥.
-Auto emergency message 📩 with location and medical info sent to hospitals and family members.
-🔧 Additional Features
-Voice assistance 🎙 for optional audio cues.
-Configurable grid system (3x3 or 2x4) 📐 for different navigation needs.
-AI-powered object recognition 🤖 for improved accuracy.
-Offline functionality ⚡ for essential features.
-Customizable vibration patterns for different object types.
-🚀 How It Works
-Open the app 📲.
-Point the camera at your surroundings 🎥.
-Receive real-time object detection feedback with vibration and haptic cues 📳.
-Use on-screen buttons for additional assistance 🎛.
-Enable GPS navigation or fall detection alerts for added safety 🗺.
-🛠 Tech Stack
-Language: Java/Kotlin (Android) or Swift (iOS)
-Machine Learning: TensorFlow Lite / OpenCV / YOLO
-Haptic Feedback: Android Vibration API, iOS Core Haptics
-GPS & Emergency Alerts: Google Maps API, Twilio API
-📌 Future Enhancements
-🌍 Multi-language support.
-🎵 Dynamic sound cues for navigation.
-🦾 Integration with smart wearables (e.g., neosapien with camera, smart glasses).
-🗂 Cloud-based object recognition for improved AI training.
-🏗 Installation & Setup
-Clone the repo:
+### 🚨 Emergency Features
+- **GPS Functionality:** Navigation and location tracking 🗺
+- **Fall Detection:** Auto emergency alert activation 📡
+- **Medical Information Storage:** Quick access to health data for emergencies 🏥
+- **Automated Emergency Messages:** Sends location and medical info to hospitals and family members 📩
+
+### 🔧 Additional Functionalities
+- **Voice Assistance:** Audio cues for enhanced interaction 🎙
+- **Customizable Grid Layouts:** Choose between **3x3** or **2x4** grid systems 📐
+- **AI-Powered Object Recognition:** Powered by **TensorFlow Lite, OpenCV, or YOLO** 🤖
+- **Offline Functionality:** Essential features work without internet ⚡
+- **Personalized Vibration Patterns:** Different haptic responses for various object types
+
+---
+## 🚀 How It Works
+1. **Launch the app** 📲
+2. **Point the camera at your surroundings** 🎥
+3. **Receive real-time feedback** via haptic cues 📳
+4. **Use on-screen or physical controls** for additional assistance 🎛
+5. **Enable GPS navigation or emergency alerts** for added security 🗺
+
+---
+## 🛠 Tech Stack
+- **Mobile Platforms:** Java/Kotlin (Android) | Swift (iOS)
+- **Machine Learning:** TensorFlow Lite / OpenCV / YOLO
+- **Haptic Feedback:** Android Vibration API, iOS Core Haptics
+- **GPS & Emergency Alerts:** Google Maps API, Twilio API
+
+---
+## 📌 Future Enhancements
+- 🌍 **Multi-language support** for global accessibility
+- 🎵 **Dynamic sound cues** to aid navigation
+- 🦾 **Integration with smart wearables** (e.g., smart glasses, AI-powered assistants)
+- 🗂 **Cloud-based AI training** for improved object recognition
+
+---
+## 🏗 Installation & Setup
+### Clone the repository:
+```sh
 git clone https://github.com/yourusername/Vision-Assistance-App.git
-Open the project in Android Studio/Xcode.
-Build and install on a test device.
-📜 License
-This project is licensed under the MIT License.
+```
+### Setup Instructions:
+1. Open the project in **Android Studio/Xcode**.
+2. Build and install the app on a test device.
+
+---
+## 📜 License
+This project is licensed under the **MIT License**.
+
