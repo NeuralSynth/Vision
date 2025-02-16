@@ -1,65 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera Access</title>
-    <style>
-        body {
-            text-align: center;
-            font-family: Arial, sans-serif;
-            background-color: black;
-            color:white;
-        }
-        video {
-            width: 80%;
-            max-width: 600px;
-            border: 2px solid black;
-            border-radius: 10px;
-            margin-top: 10px;
-        }
-        button {
-            margin-top: 10px;
-            padding: 10px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body>
-    <h1>Camera Access in Webpage</h1>
-    <video id="video" autoplay></video><br>
-    <button id="start">Start Camera</button>
-    <button id="stop">Stop Camera</button>
-
-    <script>
-        const video = document.getElementById('video');
-        const startButton = document.getElementById('start');
-        const stopButton = document.getElementById('stop');
-        let stream = null;
-
-        startButton.addEventListener('click', async () => {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                video.srcObject = stream;
-            } catch (error) {
-                console.error("Error accessing camera:", error);
-                alert("Camera access denied!");
-            }
-        });
-
-        stopButton.addEventListener('click', () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-                video.srcObject = null;
-            }
-        });
-        //to add a gradient background 
-        // to add fast img detection 
-        // to tell the user abt the dist through sound fast
-        //is this a good idea?
-
-    </script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vite + React</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
-
