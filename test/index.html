@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLOv6 Object Detection</title>
+    <style>
+        body { text-align: center; font-family: Arial, sans-serif; }
+        canvas { border: 2px solid black; }
+    </style>
+</head>
+<body>
+    <h1>YOLOv6 Object Detection</h1>
+    <video id="video" width="640" height="480" autoplay></video>
+    <canvas id="canvas" width="640" height="480"></canvas>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        async function startCamera() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+        }
+        
+        async function detectObjects() {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('image', blob, 'frame.jpg');
+
+                const response = await fetch('http://localhost:5000/detect', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                drawDetections(data.detections);
+                requestAnimationFrame(detectObjects);
+            }, 'image/jpeg');
+        }
+        
+        function drawDetections(detections) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = "red";
+            ctx.lineWidth = 2;
+            ctx.font = "18px Arial";
+            ctx.fillStyle = "red";
+
+            detections.forEach(det => {
+                ctx.strokeRect(det.x1, det.y1, det.x2 - det.x1, det.y2 - det.y1);
+                ctx.fillText(`Class: ${det.class} (${det.confidence.toFixed(2)})`, det.x1, det.y1 - 5);
+            });
+        }
+
+        video.addEventListener('loadeddata', () => {
+            detectObjects();
+        });
+        
+        startCamera();
+    </script>
+</body>
+</html>
