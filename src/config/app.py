@@ -7,6 +7,7 @@ import urllib.request
 import cv2
 import logging
 import sys
+from ultralytics import YOLO
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,42 +22,8 @@ CORS(app, resources={
     }
 })
 
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Add weight file management with error handling
-WEIGHTS_URL = "https://github.com/patrick013/Object-Detection---Yolov3/raw/master/model/yolov3.weights"
-WEIGHTS_PATH = os.path.join(current_dir, 'yolov3.weights')
-CONFIG_PATH = os.path.join(current_dir, 'yolov3.cfg')
-LABELS_PATH = os.path.join(current_dir, 'coco.names')
-
-# Download weights if they don't exist
-def download_weights():
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
-        req = urllib.request.Request(WEIGHTS_URL, headers=headers)
-        with urllib.request.urlopen(req) as response, open(WEIGHTS_PATH, 'wb') as out_file:
-            data = response.read()
-            out_file.write(data)
-        return True
-    except Exception as e:
-        logger.error(f"Download error: {str(e)}")
-        return False
-
-if not os.path.exists(WEIGHTS_PATH) or os.path.getsize(WEIGHTS_PATH) < 200000000:
-    if not download_weights():
-        raise RuntimeError("Failed to download weights")
-
-try:
-    net = cv2.dnn.readNetFromDarknet(CONFIG_PATH, WEIGHTS_PATH)
-except Exception as e:
-    raise RuntimeError(f"Failed to load YOLOv3 model: {str(e)}")
-
-layer_names = net.getLayerNames()
-output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers().flatten()]
-
-with open(LABELS_PATH, 'r') as f:
-    classes = [line.strip() for line in f.readlines()]
+# Load YOLOv5 model
+model = YOLO("yolov5s.pt")
 
 @app.route('/')
 def home():
@@ -77,41 +44,20 @@ def detect():
         img_bytes = base64.b64decode(img_data.split(',')[1])
         nparr = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        height, width = img.shape[:2]
-        blob = cv2.dnn.blobFromImage(img, 1/255.0, (416, 416), swapRB=True, crop=False)
-        net.setInput(blob)
-        outputs = net.forward(output_layers)
-        boxes = []
-        confidences = []
-        class_ids = []
 
-        for output in outputs:
-            for detection in output:
-                scores = detection[5:]
-                class_id = np.argmax(scores)
-                confidence = scores[class_id]
-                if confidence > 0.5:
-                    center_x = int(detection[0] * width)
-                    center_y = int(detection[1] * height)
-                    w = int(detection[2] * width)
-                    h = int(detection[3] * height)
-                    x = int(center_x - w/2)
-                    y = int(center_y - h/2)
-                    boxes.append([x, y, w, h])
-                    confidences.append(float(confidence))
-                    class_ids.append(class_id)
+        results = model(img)  # Run YOLOv5 detection
 
-        indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
-        results = []
-        for i in indices:
-            i = i if isinstance(i, int) else i[0]
-            box = boxes[i]
-            results.append({
-                'class': classes[class_ids[i]],
-                'confidence': confidences[i],
-                'box': box
+        detections = []
+        for det in results.xyxy[0].cpu().numpy():
+            x1, y1, x2, y2, conf, cls = det
+            detections.append({
+                "x1": int(x1), "y1": int(y1),
+                "x2": int(x2), "y2": int(y2),
+                "confidence": float(conf),
+                "class": int(cls)
             })
-        return jsonify({'detections': results})
+
+        return jsonify({"detections": detections})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
