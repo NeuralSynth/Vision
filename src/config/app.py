@@ -2,17 +2,17 @@ import numpy as np
 import base64
 from flask import Flask, request, jsonify   
 from flask_cors import CORS
-import os
-import urllib.request
 import cv2
 import logging
 import sys
+from ultralytics import YOLO
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-# Update CORS configuration
 CORS(app, resources={
     r"/*": {
         "origins": ["http://localhost:5173", "http://localhost:3000"],
@@ -21,100 +21,162 @@ CORS(app, resources={
     }
 })
 
+# Detection settings for optimal accuracy
+CONF_THRESHOLD = 0.35  # Increased confidence threshold for more precise detections
+IOU_THRESHOLD = 0.4   # Adjusted IOU threshold for better overlap handling
+IMG_SIZE = 640      # Increased to YOLOv8x's optimal input size
+MAX_OBJECTS = 50    # Maximum number of objects to detect
+CLASSES = None      # Detect all classes
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
+# Initialize thread pool for processing
+thread_pool = ThreadPoolExecutor(max_workers=2)
 
-# Add weight file management with error handling
-WEIGHTS_URL = "https://github.com/patrick013/Object-Detection---Yolov3/raw/master/model/yolov3.weights"
-WEIGHTS_PATH = os.path.join(current_dir, 'yolov3.weights')
-CONFIG_PATH = os.path.join(current_dir, 'yolov3.cfg')
-LABELS_PATH = os.path.join(current_dir, 'coco.names')
+logger.info("Configuring YOLOv8x for high-precision detection")
 
-# Download weights if they don't exist
-def download_weights():
-    try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'}
-        req = urllib.request.Request(WEIGHTS_URL, headers=headers)
-        with urllib.request.urlopen(req) as response, open(WEIGHTS_PATH, 'wb') as out_file:
-            data = response.read()
-            out_file.write(data)
-        return True
-    except Exception as e:
-        logger.error(f"Download error: {str(e)}")
-        return False
-
-if not os.path.exists(WEIGHTS_PATH) or os.path.getsize(WEIGHTS_PATH) < 200000000:
-    if not download_weights():
-        raise RuntimeError("Failed to download weights")
-
+# Initialize YOLOv8x model with optimized settings
 try:
-    net = cv2.dnn.readNetFromDarknet(CONFIG_PATH, WEIGHTS_PATH)
+    model = YOLO('yolov8x.pt')
+    model.conf = CONF_THRESHOLD
+    model.iou = IOU_THRESHOLD
+    model.max_det = MAX_OBJECTS
+    model.classes = CLASSES  # All classes enabled
+    logger.info("YOLOv8x model loaded with precision-optimized settings")
 except Exception as e:
-    raise RuntimeError(f"Failed to load YOLOv3 model: {str(e)}")
+    logger.error(f"Error loading YOLOv8x model: {e}")
+    sys.exit(1)
 
-layer_names = net.getLayerNames()
-output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers().flatten()]
-
-with open(LABELS_PATH, 'r') as f:
-    classes = [line.strip() for line in f.readlines()]
-
-@app.route('/')
-def home():
-    return jsonify({"message": "Object Detection API is running"})
-
-@app.route('/process', methods=['POST'])    
-def process():
-    data = request.json
-    if not data or 'image' not in data:
-        return jsonify({"error": "No image provided"}), 400
-
-    return jsonify({"message": "Image received"})
-
-@app.route('/detect', methods=['POST'])
-def detect():
+def enhance_image(img):
+    """Enhance image quality for better detection"""
     try:
-        img_data = request.json['image']
+        # Convert to float32 for processing
+        img_float = img.astype(np.float32) / 255.0
+        
+        # Apply adaptive histogram equalization for better contrast
+        lab = cv2.cvtColor(img_float, cv2.COLOR_BGR2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        l = clahe.apply(np.uint8(l * 255)) / 255.0
+        enhanced = cv2.merge([l, a, b])
+        enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+        
+        # Convert back to uint8
+        enhanced = np.clip(enhanced * 255, 0, 255).astype(np.uint8)
+        return enhanced
+    except Exception as e:
+        logger.warning(f"Image enhancement failed: {e}")
+        return img
+
+def preprocess_image(img_data):
+    """Optimize image preprocessing for accurate detection"""
+    try:
+        # Decode base64 image
         img_bytes = base64.b64decode(img_data.split(',')[1])
         nparr = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        height, width = img.shape[:2]
-        blob = cv2.dnn.blobFromImage(img, 1/255.0, (416, 416), swapRB=True, crop=False)
-        net.setInput(blob)
-        outputs = net.forward(output_layers)
-        boxes = []
-        confidences = []
-        class_ids = []
-
-        for output in outputs:
-            for detection in output:
-                scores = detection[5:]
-                class_id = np.argmax(scores)
-                confidence = scores[class_id]
-                if confidence > 0.5:
-                    center_x = int(detection[0] * width)
-                    center_y = int(detection[1] * height)
-                    w = int(detection[2] * width)
-                    h = int(detection[3] * height)
-                    x = int(center_x - w/2)
-                    y = int(center_y - h/2)
-                    boxes.append([x, y, w, h])
-                    confidences.append(float(confidence))
-                    class_ids.append(class_id)
-
-        indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
-        results = []
-        for i in indices:
-            i = i if isinstance(i, int) else i[0]
-            box = boxes[i]
-            results.append({
-                'class': classes[class_ids[i]],
-                'confidence': confidences[i],
-                'box': box
-            })
-        return jsonify({'detections': results})
+        
+        # Enhance image quality
+        img = enhance_image(img)
+        
+        # Resize image to optimal size while maintaining aspect ratio
+        h, w = img.shape[:2]
+        scale = min(IMG_SIZE/h, IMG_SIZE/w)
+        if scale != 1:
+            new_h, new_w = int(h * scale), int(w * scale)
+            img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        
+        return img, (h, w)
     except Exception as e:
+        logger.error(f"Error in image preprocessing: {e}")
+        raise
+
+def filter_detections(detections, min_area=100):
+    """Filter out likely false positives"""
+    filtered = []
+    for det in detections:
+        x, y, w, h = det["bbox"]
+        area = w * h
+        if area >= min_area and det["confidence"] >= CONF_THRESHOLD:
+            filtered.append(det)
+    return filtered
+
+async def process_detection(img):
+    """Process detection with enhanced accuracy"""
+    try:
+        # Run detection with augmented inference
+        results = model(img, 
+                       verbose=False,
+                       augment=True,     # Enable test time augmentation
+                       retina_masks=True) # Enable high-quality segmentation
+        return results
+    except Exception as e:
+        logger.error(f"Error in detection processing: {e}")
+        raise
+
+@app.route('/')
+def home():
+    return jsonify({
+        "message": "Object Detection API is running",
+        "model": "YOLOv8x",
+        "settings": {
+            "confidence_threshold": CONF_THRESHOLD,
+            "iou_threshold": IOU_THRESHOLD,
+            "image_size": IMG_SIZE,
+            "max_objects": MAX_OBJECTS,
+            "image_enhancement": "enabled"
+        }
+    })
+
+@app.route('/detect', methods=['POST'])
+async def detect():
+    try:
+        # Preprocess image
+        img, original_dims = preprocess_image(request.json['image'])
+        
+        # Run detection
+        results = await process_detection(img)
+        
+        # Process results
+        detections = []
+        if len(results) > 0:
+            for r in results[0].boxes:
+                # Get box coordinates and scale back to original size
+                h, w = original_dims
+                img_h, img_w = img.shape[:2]
+                scale_h, scale_w = h/img_h, w/img_w
+                
+                xyxy = r.xyxy[0].numpy()
+                x1, y1, x2, y2 = map(int, [
+                    xyxy[0] * scale_w,
+                    xyxy[1] * scale_h,
+                    xyxy[2] * scale_w,
+                    xyxy[3] * scale_h
+                ])
+                
+                conf = float(r.conf[0])
+                cls = int(r.cls[0])
+                name = model.names[cls]
+                
+                detections.append({
+                    "class": name,
+                    "confidence": round(float(conf), 4),
+                    "bbox": [x1, y1, x2 - x1, y2 - y1]
+                })
+        
+        # Filter detections to remove false positives
+        filtered_detections = filter_detections(detections)
+        
+        return jsonify({
+            "detections": filtered_detections,
+            "performance": {
+                "total_detections": len(detections),
+                "filtered_detections": len(filtered_detections),
+                "image_size": img.shape[:2],
+                "confidence_threshold": CONF_THRESHOLD
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error in detection: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
-

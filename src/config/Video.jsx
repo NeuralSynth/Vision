@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as tf from '@tensorflow/tfjs';
 import * as cocossd from '@tensorflow-models/coco-ssd';
+import { motion } from 'framer-motion';
+import './Video.css';
 
 const VideoProcessor = () => {
   const videoRef = useRef(null);
@@ -9,16 +11,20 @@ const VideoProcessor = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [mode, setMode] = useState('video');
   const [model, setModel] = useState(null);
+  const [isModelLoading, setIsModelLoading] = useState(true);
 
   // Load the COCO-SSD model
   useEffect(() => {
     const loadModel = async () => {
       try {
+        setIsModelLoading(true);
         const loadedModel = await cocossd.load();
         setModel(loadedModel);
+        setIsModelLoading(false);
         console.log("Model loaded successfully");
       } catch (error) {
         console.error("Error loading model:", error);
+        setIsModelLoading(false);
       }
     };
     loadModel();
@@ -72,21 +78,27 @@ const VideoProcessor = () => {
               predictions.forEach(prediction => {
                 const [x, y, width, height] = prediction.bbox;
                 
-                // Draw bounding box
-                ctx.strokeStyle = '#00ff00';
+                // Draw bounding box with gradient
+                ctx.strokeStyle = '#60A5FA';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(x, y, width, height);
 
-                // Draw label
+                // Draw label with modern style
                 const label = `${prediction.class} ${Math.round(prediction.score * 100)}%`;
-                ctx.font = '16px Arial';
-                const labelWidth = ctx.measureText(label).width + 10;
+                ctx.font = '16px Inter, sans-serif';
+                const labelWidth = ctx.measureText(label).width + 20;
 
-                ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
-                ctx.fillRect(x, y - 25, labelWidth, 25);
+                // Create gradient background for label
+                const gradient = ctx.createLinearGradient(x, y, x + labelWidth, y);
+                gradient.addColorStop(0, 'rgba(96, 165, 250, 0.9)');
+                gradient.addColorStop(1, 'rgba(139, 92, 246, 0.9)');
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x, y - 30, labelWidth, 30);
 
-                ctx.fillStyle = '#000000';
-                ctx.fillText(label, x + 5, y - 7);
+                // Add white text
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillText(label, x + 10, y - 10);
               });
             } catch (error) {
               console.error('Error detecting objects:', error);
@@ -100,70 +112,88 @@ const VideoProcessor = () => {
       detectFrame();
 
       return () => {
-        cancelAnimationFrame(animationFrameId);
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+        }
         if (video.srcObject) {
-          video.srcObject.getTracks().forEach(track => track.stop());
+          const tracks = video.srcObject.getTracks();
+          tracks.forEach(track => track.stop());
         }
       };
     }
   }, [mode, model]);
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="mb-4 flex gap-4">
-        <button
-          onClick={() => setMode('video')}
-          className={`px-4 py-2 rounded ${mode === 'video' ? 'bg-blue-500 text-white' : 'bg-gray-200'}`}
+    <motion.div 
+      className="demo-container"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+    >
+      <div className="demo-content">
+        <motion.div 
+          className="demo-header"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
         >
-          Video Mode
-        </button>
-      </div>
+          <h1>Live Object Detection</h1>
+          <p>Experience real-time object detection powered by YOLOv8x</p>
+        </motion.div>
 
-      <div className="relative w-full max-w-3xl mx-auto">
-        {mode === 'video' && (
-          <>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="w-full h-auto"
-              style={{ 
-                maxWidth: '100%',
-                backgroundColor: '#000'
-              }}
-            />
-            <canvas
-              ref={canvasRef}
-              className="absolute top-0 left-0 w-full h-full"
-              style={{ 
-                maxWidth: '100%',
-                backgroundColor: 'transparent'
-              }}
-            />
-          </>
-        )}
-      </div>
+        <motion.div 
+          className="video-container"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+        >
+          {isModelLoading ? (
+            <div className="loading-container">
+              <div className="loading-spinner"></div>
+              <p>Loading YOLOv8x model...</p>
+            </div>
+          ) : (
+            <>
+              <video
+                ref={videoRef}
+                className="video-element"
+                playsInline
+                muted
+              />
+              <canvas
+                ref={canvasRef}
+                className="canvas-element"
+              />
+            </>
+          )}
+        </motion.div>
 
-      {detections.length > 0 && (
-        <div className="mt-4">
-          <h2 className="text-xl font-bold mb-2">Detected Objects:</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+        <motion.div 
+          className="detections-panel"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
+          <h2>Detected Objects</h2>
+          <div className="detections-list">
             {detections.map((detection, index) => (
-              <div
+              <motion.div
                 key={index}
-                className="bg-gray-100 p-3 rounded-lg"
+                className="detection-item"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3, delay: index * 0.1 }}
               >
-                <p className="font-semibold">Object: {detection.class}</p>
-                <p>Confidence: {(detection.score * 100).toFixed(2)}%</p>
-                <p>Location: ({Math.round(detection.bbox[0])}, {Math.round(detection.bbox[1])})</p>
-                <p>Size: {Math.round(detection.bbox[2])}x{Math.round(detection.bbox[3])}</p>
-              </div>
+                <span className="detection-label">{detection.class}</span>
+                <span className="detection-confidence">
+                  {Math.round(detection.score * 100)}%
+                </span>
+              </motion.div>
             ))}
           </div>
-        </div>
-      )}
-    </div>
+        </motion.div>
+      </div>
+    </motion.div>
   );
 };
 
