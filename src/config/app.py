@@ -35,7 +35,7 @@ logger.info("Configuring YOLOv8x for high-precision detection")
 
 # Initialize YOLOv8x model with optimized settings
 try:
-    model = YOLO('yolov8x.pt')
+    model = load_yolo_model('yolov8x')
     model.conf = CONF_THRESHOLD
     model.iou = IOU_THRESHOLD
     model.max_det = MAX_OBJECTS
@@ -177,6 +177,10 @@ async def detect():
     except Exception as e:
         logger.error(f"Error in detection: {e}")
         return jsonify({'error': str(e)}), 500
+
+def load_yolo_model(model_name='yolov8x'):
+    model = YOLO(f'{model_name}.pt')
+    return model
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
