@@ -8,6 +8,7 @@ import sys
 from ultralytics import YOLO
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from model_downloader import load_yolo_model  # Import the model loading function
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,17 +34,15 @@ thread_pool = ThreadPoolExecutor(max_workers=2)
 
 logger.info("Configuring YOLOv8x for high-precision detection")
 
-# Initialize YOLOv8x model with optimized settings
-try:
-    model = load_yolo_model('yolov8x')
-    model.conf = CONF_THRESHOLD
-    model.iou = IOU_THRESHOLD
-    model.max_det = MAX_OBJECTS
-    model.classes = CLASSES  # All classes enabled
-    logger.info("YOLOv8x model loaded with precision-optimized settings")
-except Exception as e:
-    logger.error(f"Error loading YOLOv8x model: {e}")
-    sys.exit(1)
+# Initialize model variable
+model = None
+
+@app.before_first_request
+def load_model():
+    """Load model before the first request"""
+    global model
+    model = load_yolo_model(model_name='yolov8x')  # or use a smaller model like 'yolov8n'
+    logger.info("YOLOv8x model loaded and ready")
 
 def enhance_image(img):
     """Enhance image quality for better detection"""
@@ -177,10 +176,6 @@ async def detect():
     except Exception as e:
         logger.error(f"Error in detection: {e}")
         return jsonify({'error': str(e)}), 500
-
-def load_yolo_model(model_name='yolov8x'):
-    model = YOLO(f'{model_name}.pt')
-    return model
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
