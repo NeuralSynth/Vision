@@ -1,7 +1,6 @@
 import os
 import urllib.request
-from pathlib import Path
-import torch
+#from pathlib import Path
 from ultralytics import YOLO
 
 # Model URLs - you can choose the appropriate one

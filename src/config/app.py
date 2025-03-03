@@ -4,9 +4,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import cv2
 import logging
-import sys
-from ultralytics import YOLO
-import asyncio
+#import sys
+#from ultralytics import YOLO
+#import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from model_downloader import load_yolo_model  # Import the model loading function
 
