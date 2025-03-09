@@ -37,12 +37,13 @@ logger.info("Configuring YOLOv8x for high-precision detection")
 # Initialize model variable
 model = None
 
-@app.before_first_request
+@app.before_request
 def load_model():
     """Load model before the first request"""
     global model
-    model = load_yolo_model(model_name='yolov8x')  # or use a smaller model like 'yolov8n'
-    logger.info("YOLOv8x model loaded and ready")
+    if model is None:
+        model = load_yolo_model(model_name='yolov8x')  # or use a smaller model like 'yolov8n'
+        logger.info("YOLOv8x model loaded and ready")
 
 def enhance_image(img):
     """Enhance image quality for better detection"""
