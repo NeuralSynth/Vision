@@ -9,7 +9,7 @@ import logging
 #import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from model_downloader import load_yolo_model  # Import the model loading function
-
+import sound
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ CORS(app, resources={
 })
 
 # Detection settings for optimal accuracy
-CONF_THRESHOLD = 0.35  # Increased confidence threshold for more precise detections
+CONF_THRESHOLD = 0.5  # Increased confidence threshold for more precise detections
 IOU_THRESHOLD = 0.4   # Adjusted IOU threshold for better overlap handling
 IMG_SIZE = 640      # Increased to YOLOv8x's optimal input size
 MAX_OBJECTS = 50    # Maximum number of objects to detect

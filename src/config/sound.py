@@ -1,3 +1,6 @@
+import cv2
+import requests
+import numpy as np
 import pyttsx3
 import threading
 import time
@@ -66,9 +69,6 @@ def stop_tts_worker(tts_thread):
     tts_queue.put(None)
     tts_thread.join()
 
-# Global variable to store last detected objects
-last_objects = set()
-
 # Function to get detections from the API
 def get_detections():
     try:
@@ -79,60 +79,70 @@ def get_detections():
         print(f"Error fetching detections: {e}")
         return []
 
-
-engine = initialize_tts_engine()
-tts_thread = start_tts_worker(engine)
-announcement_thread = start_periodic_announcement()
-
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        print("Warning: Failed to capture frame.")
-        continue  # Skip iteration if frame isn't captured
-
-    # Convert frame to RGB
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-    # Get detections from the API
-    detections = get_detections()
-    detected_objects = set()
-
-    height, width, _ = frame.shape
-
-    # Draw detections on the frame
-    for det in detections:
-        try:
-            x1, y1, x2, y2 = det['bbox']
-            label = det['class']
-            conf = det['confidence']
-
-            detected_objects.add(f"{label}")
-
-            # Draw bounding box and label
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, f"{label} {conf:.2f}", (x1, y1 - 10), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        except Exception as e:
-            print(f"Error processing bounding box: {e}")
-
-    # Announce newly detected objects
-    new_objects = detected_objects - last_objects
-    if new_objects:
-        sentence = ", ".join(new_objects)
-        print(f"Announcing: {sentence}")
-        speak(sentence)
+if __name__ == '__main__':
+    # Global variable to store last detected objects
+    last_objects = set()
     
-    last_objects = detected_objects  # Update last detected objects
+    # Open the integrated camera
+    cap = cv2.VideoCapture(0)  # Use device index 0 for the default camera
 
-    # Display the frame
-    cv2.imshow("Integrated Camera Object Detection", frame)
+    if not cap.isOpened():
+        print("Error: Couldn't open the integrated camera.")
+        exit()
 
-    # Press 'q' to exit
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    engine = initialize_tts_engine()
+    tts_thread = start_tts_worker(engine)
+    announcement_thread = start_periodic_announcement()
 
-cap.release()
-cv2.destroyAllWindows()
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Warning: Failed to capture frame.")
+            continue  # Skip iteration if frame isn't captured
 
-# Stop the text-to-speech worker thread
-stop_tts_worker(tts_thread)
+        # Convert frame to RGB
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Get detections from the API
+        detections = get_detections()
+        detected_objects = set()
+
+        height, width, _ = frame.shape
+
+        # Draw detections on the frame
+        for det in detections:
+            try:
+                x1, y1, x2, y2 = det['bbox']
+                label = det['class']
+                conf = det['confidence']
+
+                detected_objects.add(f"{label}")
+
+                # Draw bounding box and label
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.putText(frame, f"{label} {conf:.2f}", (x1, y1 - 10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            except Exception as e:
+                print(f"Error processing bounding box: {e}")
+
+        # Announce newly detected objects
+        new_objects = detected_objects - last_objects
+        if new_objects:
+            sentence = ", ".join(new_objects)
+            print(f"Announcing: {sentence}")
+            speak(sentence)
+        
+        last_objects = detected_objects  # Update last detected objects
+
+        # Display the frame
+        cv2.imshow("Integrated Camera Object Detection", frame)
+
+        # Press 'q' to exit
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+    # Stop the text-to-speech worker thread
+    stop_tts_worker(tts_thread)
