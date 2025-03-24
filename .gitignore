@@ -2,6 +2,7 @@
 *.weights
 __pycache__/
 *.pyc
+*.pt
 .env
 .venv
 env/

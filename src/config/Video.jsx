@@ -1,6 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
-import * as tf from '@tensorflow/tfjs';
-import * as cocossd from '@tensorflow-models/coco-ssd';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import './Video.css';
 
@@ -8,31 +6,12 @@ const VideoProcessor = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [detections, setDetections] = useState([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [mode, setMode] = useState('video');
-  const [model, setModel] = useState(null);
-  const [isModelLoading, setIsModelLoading] = useState(true);
-
-  // Load the COCO-SSD model
-  useEffect(() => {
-    const loadModel = async () => {
-      try {
-        setIsModelLoading(true);
-        const loadedModel = await cocossd.load();
-        setModel(loadedModel);
-        setIsModelLoading(false);
-        console.log("Model loaded successfully");
-      } catch (error) {
-        console.error("Error loading model:", error);
-        setIsModelLoading(false);
-      }
-    };
-    loadModel();
-  }, []);
+  const [mode] = useState('video');
+  const [isModelLoading] = useState(true);
 
   // Process video frames
   useEffect(() => {
-    if (mode === 'video' && model) {
+    if (mode === 'video') {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const ctx = canvas.getContext('2d');
@@ -70,13 +49,26 @@ const VideoProcessor = () => {
           if (!isDetecting) {
             isDetecting = true;
             try {
-              // Detect objects
-              const predictions = await model.detect(video);
-              setDetections(predictions);
+              // Convert canvas to base64
+              const dataUrl = canvas.toDataURL('image/jpeg');
+              const base64Image = dataUrl.split(',')[1];
+
+              // Send base64 image to Flask server
+              const response = await fetch('http://localhost:5000/detect', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ image: base64Image }),
+              });
+
+              const result = await response.json();
+              setDetections(result.detections);
 
               // Draw detections
-              predictions.forEach(prediction => {
+              result.detections.forEach(prediction => {
                 const [x, y, width, height] = prediction.bbox;
+                const quadrant = prediction.quadrant;
                 
                 // Draw bounding box with gradient
                 ctx.strokeStyle = '#60A5FA';
@@ -84,7 +76,7 @@ const VideoProcessor = () => {
                 ctx.strokeRect(x, y, width, height);
 
                 // Draw label with modern style
-                const label = `${prediction.class} ${Math.round(prediction.score * 100)}%`;
+                const label = `${prediction.class} ${Math.round(prediction.confidence * 100)}% (Q${quadrant})`;
                 ctx.font = '16px Inter, sans-serif';
                 const labelWidth = ctx.measureText(label).width + 20;
 
@@ -121,7 +113,7 @@ const VideoProcessor = () => {
         }
       };
     }
-  }, [mode, model]);
+  }, [mode]);
 
   return (
     <motion.div 
@@ -186,7 +178,10 @@ const VideoProcessor = () => {
               >
                 <span className="detection-label">{detection.class}</span>
                 <span className="detection-confidence">
-                  {Math.round(detection.score * 100)}%
+                  {Math.round(detection.confidence * 100)}%
+                </span>
+                <span className="detection-quadrant">
+                  (Q{detection.quadrant})
                 </span>
               </motion.div>
             ))}

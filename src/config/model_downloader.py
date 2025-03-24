@@ -9,7 +9,8 @@ MODEL_URLS = {
     'yolov8s': 'https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8s.pt',
     'yolov8m': 'https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8m.pt',
     'yolov8l': 'https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8l.pt',
-    'yolov8x': 'https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8x.pt'
+    'yolov8x': 'https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8x.pt',
+    'yolov8seg': 'https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8x-seg.pt'
 }
 
 def download_model(model_name='yolov8x', models_dir='models'):

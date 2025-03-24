@@ -1,28 +1,33 @@
 import cv2
-import requests
-import numpy as np
+# import requests
+# import numpy as np
 import pyttsx3
 import threading
 import time
 from queue import Queue
+from ultralytics import YOLO
+
+# Load YOLOv8 model
+model = YOLO("yolov8n.pt")  # Use 'yolov8s.pt' for better accuracy
+
+# ESP32-CAM Stream URL
+# ESP32_STREAM_URL = "http://172.16.68.190:81/stream"
 
 # Initialize text-to-speech engine
-def initialize_tts_engine():
-    try:
-        engine = pyttsx3.init(driverName="espeak")
-        engine.setProperty('rate', 150)  # Speed of speech
-        engine.setProperty('volume', 1.0)  # Volume level
-        print("Text-to-speech engine initialized successfully.")
-        return engine
-    except Exception as e:
-        print(f"Failed to initialize text-to-speech engine: {e}")
-        return None
+try:
+    engine = pyttsx3.init(driverName="espeak")
+    engine.setProperty('rate', 150)  # Speed of speech
+    engine.setProperty('volume', 1.0)  # Volume level
+    print("Text-to-speech engine initialized successfully.")
+except Exception as e:
+    print(f"Failed to initialize text-to-speech engine: {e}")
+    engine = None
 
 # Queue for text-to-speech requests
 tts_queue = Queue()
 
 # Function to process text-to-speech requests
-def tts_worker(engine):
+def tts_worker():
     while True:
         text = tts_queue.get()
         if text is None:
@@ -35,20 +40,32 @@ def tts_worker(engine):
                 print(f"Failed to produce speech: {e}")
         tts_queue.task_done()
 
-# Function to start the text-to-speech worker thread
-def start_tts_worker(engine):
-    tts_thread = threading.Thread(target=tts_worker, args=(engine,))
-    tts_thread.daemon = True
-    tts_thread.start()
-    return tts_thread
+# Start the text-to-speech worker thread
+tts_thread = threading.Thread(target=tts_worker)
+tts_thread.daemon = True
+tts_thread.start()
 
 # Function to speak in a separate thread with a delay
 def speak(text):
     tts_queue.put(text)
     time.sleep(2)  # Delay between each announcement
 
+last_objects = set()  # Store last detected objects to avoid repeated speech
+
+# Function to determine the quadrant of a point in the frame
+def get_quadrant(x, y, width, height):
+    if x < width / 2 and y < height / 2:
+        return "top-left"
+    elif x >= width / 2 and y < height / 2:
+        return "top-right"
+    elif x < width / 2 and y >= height / 2:
+        return "bottom-left"
+    else:
+        return "bottom-right"
+
 # Function to announce all detected objects every 3 seconds
 def periodic_announcement():
+    #global last_objects  # Declare last_objects as global
     while True:
         time.sleep(3)
         print("Periodic announcement thread running...")
@@ -57,92 +74,78 @@ def periodic_announcement():
             print(f"Repeating: {sentence}")
             speak(sentence)
 
-# Function to start the periodic announcement thread
-def start_periodic_announcement():
-    announcement_thread = threading.Thread(target=periodic_announcement)
-    announcement_thread.daemon = True
-    announcement_thread.start()
-    return announcement_thread
+# Start the periodic announcement thread
+announcement_thread = threading.Thread(target=periodic_announcement)
+announcement_thread.daemon = True
+announcement_thread.start()
 
-# Function to stop the text-to-speech worker thread
-def stop_tts_worker(tts_thread):
-    tts_queue.put(None)
-    tts_thread.join()
+# Open video stream
+cap = cv2.VideoCapture(0)
 
-# Function to get detections from the API
-def get_detections():
-    try:
-        response = requests.post('http://localhost:5000/detect')
-        response.raise_for_status()
-        return response.json().get('detections', [])
-    except Exception as e:
-        print(f"Error fetching detections: {e}")
-        return []
+if not cap.isOpened():
+    print("Error: Couldn't open the video stream.")
+    exit()
 
-if __name__ == '__main__':
-    # Global variable to store last detected objects
-    last_objects = set()
-    
-    # Open the integrated camera
-    cap = cv2.VideoCapture(0)  # Use device index 0 for the default camera
+last_objects = set()  # Store last detected objects to avoid repeated speech
 
-    if not cap.isOpened():
-        print("Error: Couldn't open the integrated camera.")
-        exit()
 
-    engine = initialize_tts_engine()
-    tts_thread = start_tts_worker(engine)
-    announcement_thread = start_periodic_announcement()
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        print("Warning: Failed to capture frame.")
+        continue  # Skip iteration if frame isn't captured
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            print("Warning: Failed to capture frame.")
-            continue  # Skip iteration if frame isn't captured
+    # Convert frame to the correct format (if needed)
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # Ensure correct color format
 
-        # Convert frame to RGB
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    # Run YOLOv8 on the frame
+    results = model(frame_rgb)
 
-        # Get detections from the API
-        detections = get_detections()
-        detected_objects = set()
+    detected_objects = set()
 
-        height, width, _ = frame.shape
+    height, width, _ = frame.shape
 
-        # Draw detections on the frame
-        for det in detections:
+    # Draw detections on the frame
+    for r in results:
+        for box in r.boxes:
             try:
-                x1, y1, x2, y2 = det['bbox']
-                label = det['class']
-                conf = det['confidence']
+                x1, y1, x2, y2 = map(int, box.xyxy[0])  # Bounding box coordinates
+                conf = float(box.conf[0])  # Confidence score
+                cls = int(box.cls[0])  # Class ID
 
-                detected_objects.add(f"{label}")
+                # Get label safely
+                label = model.names.get(cls, f"Object {cls}")  # Handle missing names
+                quadrant = get_quadrant((x1 + x2) // 2, (y1 + y2) // 2, width, height)
+                detected_objects.add(f"{label} in {quadrant}")
 
                 # Draw bounding box and label
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv2.putText(frame, f"{label} {conf:.2f}", (x1, y1 - 10), 
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
             except Exception as e:
                 print(f"Error processing bounding box: {e}")
 
-        # Announce newly detected objects
-        new_objects = detected_objects - last_objects
-        if new_objects:
-            sentence = ", ".join(new_objects)
-            print(f"Announcing: {sentence}")
-            speak(sentence)
-        
-        last_objects = detected_objects  # Update last detected objects
+    # Announce newly detected objects
+    new_objects = detected_objects - last_objects
+    if new_objects:
+        sentence = ", ".join(new_objects)
+        print(f"Announcing: {sentence}")
+        speak(sentence)  # Use threaded function to prevent freezing
+    
+    last_objects = detected_objects  # Update last detected objects
 
-        # Display the frame
-        cv2.imshow("Integrated Camera Object Detection", frame)
+    # Display the frame
+    cv2.imshow("ESP32-CAM Object Detection", frame)
 
-        # Press 'q' to exit
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+    # Press 'q' to exit
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
-    cap.release()
-    cv2.destroyAllWindows()
+cap.release()
+cv2.destroyAllWindows()
 
-    # Stop the text-to-speech worker thread
-    stop_tts_worker(tts_thread)
+# Stop the text-to-speech worker thread
+tts_queue.put(None)
+tts_thread.join()
+
