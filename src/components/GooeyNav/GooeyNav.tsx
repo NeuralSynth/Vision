@@ -2,7 +2,10 @@
 	Installed from https://reactbits.dev/ts/tailwind/
 */
 
+'use client';
+
 import React, { useRef, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 interface GooeyNavItem {
   label: string;
@@ -30,11 +33,21 @@ const GooeyNav: React.FC<GooeyNavProps> = ({
   colors = [1, 2, 3, 1, 2, 3, 1, 4],
   initialActiveIndex = 0,
 }) => {
+  const pathname = usePathname();
   const containerRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLUListElement>(null);
   const filterRef = useRef<HTMLSpanElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
-  const [activeIndex, setActiveIndex] = useState<number>(initialActiveIndex);
+  const [activeIndex, setActiveIndex] = useState<number>(() => {
+    const currentPath = pathname;
+    const index = items.findIndex(item => {
+      if (item.href.startsWith('/#')) {
+        return currentPath === '/' && item.href.substring(1);
+      }
+      return item.href === currentPath;
+    });
+    return index !== -1 ? index : initialActiveIndex;
+  });
   const noise = (n = 1) => n / 2 - Math.random() * n;
   const getXY = (
     distance: number,
