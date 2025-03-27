@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, createContext, useContext } from 'react';
+import React, { useState, useEffect, useRef, createContext, useContext } from 'react';
 
 // Types for detections
 type Detection = {
@@ -67,15 +67,18 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
       setStream(newStream);
       return newStream;
     } catch (err) {
-      setError(`Camera error: ${err instanceof Error ? err.message : String(err)}`);
-      console.error('Error accessing webcam:', err);
+      const error = err as Error;
+      setError(error.message);
+      console.error('Error accessing camera:', error);
       return null;
     }
   };
 
   // Method to capture a frame from the video stream
   const captureFrame = async (): Promise<string | null> => {
-    if (!videoRef.current || !canvasRef.current || !stream) return null;
+    if (!videoRef.current || !canvasRef.current || !stream) {
+      return null;
+    }
     
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -86,7 +89,9 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
     
     // Draw current video frame to canvas
     const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
+    if (!ctx) {
+      return null;
+    }
     
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     
@@ -98,12 +103,16 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
     return base64Data;
   };
 
+  // Update detections state with new data
+  const updateDetections = (newDetections: Detection[]) => {
+    setDetections(newDetections);
+  };
+
   // Cleanup when component unmounts
   useEffect(() => {
     return () => {
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
-        setStream(null);
       }
     };
   }, [stream]);
@@ -114,14 +123,10 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
       videoRef.current = document.createElement('video');
       videoRef.current.autoplay = true;
       videoRef.current.playsInline = true;
-      videoRef.current.muted = true;
     }
 
     if (stream && videoRef.current) {
       videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(err => {
-        console.error('Error playing video:', err);
-      });
     }
   }, [stream]);
 
@@ -135,6 +140,14 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
       captureFrame 
     }}>
       {children}
+      {videoRef.current && 
+        <video 
+          ref={videoRef} 
+          autoPlay 
+          playsInline 
+          style={{ display: 'none' }} 
+        />
+      }
     </CameraContext.Provider>
   );
 }
@@ -144,27 +157,30 @@ export const useCameraStream = () => useContext(CameraContext);
 
 // The main WebcamDetection component
 const WebcamDetection = () => {
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const localCanvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDetecting, setIsDetecting] = useState(false);
-  const [localDetections, setLocalDetections] = useState<Detection[]>([]);
+  const [detectionResults, setDetectionResults] = useState<Detection[]>([]);
   const [status, setStatus] = useState<string>('Initializing...');
+  const [isLoading, setIsLoading] = useState(false);
   const animationFrameRef = useRef<number | null>(null);
-  const { getStream, stream, captureFrame, detections, frameData } = useCameraStream();
+  const { getStream, stream, captureFrame } = useCameraStream();
 
   // Initialize webcam
   useEffect(() => {
     async function setupCamera() {
+      setStatus('Accessing camera...');
       try {
-        const stream = await getStream();
-        
-        if (stream && localVideoRef.current) {
-          localVideoRef.current.srcObject = stream;
-          setStatus('Camera ready. Starting detection...');
+        const cameraStream = await getStream();
+        if (cameraStream && videoRef.current) {
+          videoRef.current.srcObject = cameraStream;
+          setStatus('Camera ready');
+          // Auto-start detection after camera is ready
+          setIsDetecting(true);
         }
       } catch (err) {
-        setStatus(`Camera error: ${err instanceof Error ? err.message : String(err)}`);
-        console.error('Error accessing webcam:', err);
+        console.error('Error setting up camera:', err);
+        setStatus('Camera error: ' + (err as Error).message);
       }
     }
 
@@ -174,132 +190,177 @@ const WebcamDetection = () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+      setIsDetecting(false);
     };
   }, [getStream]);
 
+  // Function to send frame to backend and get detections
+  const processFrame = async (frameData: string): Promise<DetectionResult | null> => {
+    try {
+      const response = await fetch('http://localhost:5000/detect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ image: frameData })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Detection failed: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error processing frame:', error);
+      return null;
+    }
+  };
+
   // Detection loop
   useEffect(() => {
+    let isActive = true;
+    
     const detectFrame = async () => {
-      if (!localVideoRef.current || !localCanvasRef.current || !localVideoRef.current.readyState || localVideoRef.current.readyState < 2) {
+      if (!isDetecting || !captureFrame || isLoading) {
         animationFrameRef.current = requestAnimationFrame(detectFrame);
         return;
       }
 
-      const video = localVideoRef.current;
-      const canvas = localCanvasRef.current;
-      const context = canvas.getContext('2d');
-
-      if (!context) {
-        return;
-      }
-
-      // Set canvas dimensions to match video
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      // Only process if we're not already processing a frame
-      if (!isDetecting) {
-        setIsDetecting(true);
+      setIsLoading(true);
+      
+      try {
+        // Capture frame from webcam
+        const frame = await captureFrame();
         
-        try {
-          // Draw video frame to canvas
-          context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        if (frame && isActive) {
+          setStatus('Processing...');
           
-          // Capture frame and send to backend
-          const base64Data = await captureFrame();
+          // Send to backend for detection
+          const result = await processFrame(frame);
           
-          if (base64Data) {
-            // Send to backend
-            const response = await fetch('http://localhost:5000/detect', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({ image: base64Data })
-            });
-            
-            if (!response.ok) {
-              throw new Error(`Server responded with status: ${response.status}`);
-            }
-
-            const result: DetectionResult = await response.json();
-            setLocalDetections(result.detections);
+          if (result && isActive) {
+            setDetectionResults(result.detections);
             setStatus(`Detected ${result.detections.length} objects`);
-            
-            // Draw bounding boxes and labels
-            result.detections.forEach(detection => {
-              const [x, y, width, height] = detection.bbox;
-              
-              // Draw bounding box
-              context.strokeStyle = '#00FFFF';
-              context.lineWidth = 2;
-              context.strokeRect(x, y, width, height);
-              
-              // Draw background for label
-              context.fillStyle = 'rgba(0, 0, 0, 0.7)';
-              const label = `${detection.class} (${Math.round(detection.confidence * 100)}%) Q${detection.quadrant}`;
-              const textWidth = context.measureText(label).width;
-              context.fillRect(x, y - 25, textWidth + 10, 25);
-              
-              // Draw label
-              context.fillStyle = '#00FFFF';
-              context.font = '16px Arial';
-              context.fillText(label, x + 5, y - 7);
-            });
           }
-        } catch (err) {
-          console.error('Error in detection:', err);
-          setStatus(`Detection error: ${err instanceof Error ? err.message : String(err)}`);
-        } finally {
-          setIsDetecting(false);
+        }
+      } catch (err) {
+        console.error('Error in detection loop:', err);
+        if (isActive) {
+          setStatus('Detection error');
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
         }
       }
       
-      animationFrameRef.current = requestAnimationFrame(detectFrame);
+      // Continue detection loop
+      if (isActive) {
+        animationFrameRef.current = requestAnimationFrame(detectFrame);
+      }
     };
 
     detectFrame();
     
     return () => {
+      isActive = false;
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isDetecting, captureFrame]);
+  }, [isDetecting, captureFrame, isLoading]);
+
+  // Draw bounding boxes on canvas
+  useEffect(() => {
+    if (!canvasRef.current || !videoRef.current || !detectionResults.length) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Clear previous drawings
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw video frame first
+    if (videoRef.current) {
+      ctx.drawImage(
+        videoRef.current, 
+        0, 0, 
+        canvas.width, 
+        canvas.height
+      );
+    }
+    
+    // Draw each detection
+    detectionResults.forEach(detection => {
+      const [x, y, width, height] = detection.bbox;
+      
+      // Draw bounding box
+      ctx.strokeStyle = '#00FFFF';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, width, height);
+      
+      // Draw label
+      ctx.fillStyle = 'rgba(0, 255, 255, 0.7)';
+      ctx.fillRect(x, y - 25, 160, 25);
+      ctx.fillStyle = '#000000';
+      ctx.font = '16px Arial';
+      ctx.fillText(
+        `${detection.class} (${Math.round(detection.confidence * 100)}%)`,
+        x + 5, 
+        y - 7
+      );
+    });
+  }, [detectionResults]);
+
+  // Toggle detection on/off
+  const toggleDetection = () => {
+    setIsDetecting(prev => !prev);
+    setStatus(isDetecting ? 'Detection paused' : 'Detection running');
+  };
 
   return (
     <div className="relative rounded-lg overflow-hidden shadow-2xl bg-black/30 backdrop-blur-sm border border-white/10">
-      <div className="absolute top-0 left-0 right-0 bg-gradient-to-r from-blue-500/80 to-purple-600/80 px-4 py-2 text-white text-sm z-10">
-        {status}
-      </div>
-      
-      <div className="relative">
-        <video 
-          ref={localVideoRef}
-          className="w-full hidden"
+      <div className="aspect-video relative">
+        {/* Video feed */}
+        <video
+          ref={videoRef}
           autoPlay
           playsInline
-          muted
+          className="absolute inset-0 w-full h-full object-cover"
         />
-        <canvas 
-          ref={localCanvasRef}
-          className="w-full"
+        
+        {/* Canvas overlay for drawing detections */}
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 w-full h-full object-cover"
+          width={640}
+          height={480}
         />
-      </div>
-      
-      <div className="p-4">
-        <h3 className="text-lg font-semibold text-white mb-2">Detected Objects</h3>
-        <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
-          {localDetections.map((detection, index) => (
-            <span 
-              key={index} 
-              className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-500/20 text-blue-200 border border-blue-400/30"
-            >
-              {detection.class} ({Math.round(detection.confidence * 100)}%)
-            </span>
-          ))}
-          {localDetections.length === 0 && (
-            <span className="text-gray-400 text-sm">No objects detected yet</span>
+        
+        {/* Status overlay */}
+        <div className="absolute top-0 left-0 right-0 bg-black/60 text-white p-2 flex justify-between items-center">
+          <span>{status}</span>
+          <button
+            onClick={toggleDetection}
+            className="px-3 py-1 bg-blue-500 hover:bg-blue-600 rounded text-sm"
+          >
+            {isDetecting ? 'Pause' : 'Start'} Detection
+          </button>
+        </div>
+        
+        {/* Detections panel */}
+        <div className="absolute bottom-0 right-0 max-w-xs bg-black/60 text-white p-2 text-sm max-h-32 overflow-y-auto">
+          {detectionResults.length === 0 ? (
+            <p>No objects detected</p>
+          ) : (
+            <ul>
+              {detectionResults.map((det, idx) => (
+                <li key={idx} className="mb-1">
+                  {det.class} ({Math.round(det.confidence * 100)}%) - Quadrant {det.quadrant}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>

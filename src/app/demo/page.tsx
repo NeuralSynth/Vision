@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import Script from 'next/script';
+import Head from 'next/head';
 import { useCameraStream } from '@/components/WebcamDetection';
 
 // Dynamically import components that use browser APIs with ssr: false
@@ -25,7 +25,9 @@ const WebcamDetection = dynamic(
 export default function DemoPage() {
   const [activeFeature, setActiveFeature] = useState('vision');
   const [isMounted, setIsMounted] = useState(false);
-  const { getStream } = useCameraStream();
+  const [modelViewerLoaded, setModelViewerLoaded] = useState(false);
+  const { getStream, detections } = useCameraStream();
+  const modelViewerRef = useRef(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -36,7 +38,36 @@ export default function DemoPage() {
         console.error('Error initializing camera:', err);
       });
     }
-  }, [isMounted, getStream]);
+
+    // Load model-viewer script manually when component mounts
+    if (isMounted && !modelViewerLoaded) {
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js';
+      script.type = 'module';
+      script.onload = () => {
+        setModelViewerLoaded(true);
+        console.log("Model Viewer script loaded successfully");
+      };
+      script.onerror = (e) => {
+        console.error("Error loading Model Viewer script:", e);
+      };
+      document.body.appendChild(script);
+    }
+  }, [isMounted, getStream, modelViewerLoaded]);
+
+  // Function to count objects by class
+  const getObjectCounts = () => {
+    if (!detections || detections.length === 0) return {};
+    
+    const counts: Record<string, number> = {};
+    detections.forEach(det => {
+      counts[det.class] = (counts[det.class] || 0) + 1;
+    });
+    
+    return counts;
+  };
+
+  const objectCounts = getObjectCounts();
 
   const features = [
     {
@@ -61,11 +92,10 @@ export default function DemoPage() {
 
   return (
     <>
-      <Script 
-        src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js" 
-        type="module"
-        strategy="afterInteractive"
-      />
+      <Head>
+        {/* Remove any auto-preloading by indicating we'll load it ourselves */}
+        <meta name="model-viewer-script-handled" content="true" />
+      </Head>
       
       <div className="min-h-screen bg-black">
         {isMounted && <AnimatedBackground />}
@@ -81,20 +111,54 @@ export default function DemoPage() {
               </p>
             </div>
 
-            {/* Only render WebcamDetection when client-side */}
+            {/* WebcamDetection section */}
             {isMounted && (
               <div className="mb-24">
-                <h2 className="text-3xl font-bold text-white text-center mb-8">Live Object Detection</h2>
+                <h2 className="text-3xl font-bold text-white text-center mb-8">
+                  Live Object Detection
+                </h2>
                 <div className="max-w-3xl mx-auto">
                   <WebcamDetection />
+                  
+                  {/* Detection analytics */}
+                  {detections && detections.length > 0 && (
+                    <div className="mt-6 bg-black/30 backdrop-blur-sm border border-white/10 rounded-lg p-4">
+                      <h3 className="text-xl font-semibold text-white mb-3">
+                        Detection Results
+                      </h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <h4 className="text-white text-lg mb-2">Objects Detected</h4>
+                          <ul className="text-gray-300">
+                            {Object.entries(objectCounts).map(([className, count]) => (
+                              <li key={className} className="mb-1 flex justify-between">
+                                <span>{className}</span>
+                                <span className="font-semibold">{count}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 className="text-white text-lg mb-2">Detection Summary</h4>
+                          <p className="text-gray-300">
+                            Total objects detected: {detections.length}
+                          </p>
+                          <p className="text-gray-300">
+                            Object types: {Object.keys(objectCounts).length}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             <div className="grid md:grid-cols-2 gap-12 items-center mb-24">
               <div className="relative h-[400px] w-full">
-                {isMounted && (
+                {isMounted && modelViewerLoaded && (
                   <ModelViewer 
+                    ref={modelViewerRef}
                     src="/models/glasses.glb" 
                     poster="/models/glasses-poster.webp" 
                     alt="Percevia Smart Glasses" 
