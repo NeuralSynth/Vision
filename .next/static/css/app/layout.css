@@ -708,9 +708,6 @@ video {
 .pointer-events-auto {
   pointer-events: auto;
 }
-.visible {
-  visibility: visible;
-}
 .fixed {
   position: fixed;
 }
@@ -876,6 +873,9 @@ video {
 .mt-32 {
   margin-top: 8rem;
 }
+.mt-4 {
+  margin-top: 1rem;
+}
 .mt-6 {
   margin-top: 1.5rem;
 }
@@ -954,9 +954,6 @@ video {
 .h-screen {
   height: 100vh;
 }
-.max-h-32 {
-  max-height: 8rem;
-}
 .max-h-\[700px\] {
   max-height: 700px;
 }
@@ -1025,9 +1022,6 @@ video {
 }
 .max-w-md {
   max-width: 28rem;
-}
-.max-w-xs {
-  max-width: 20rem;
 }
 .flex-1 {
   flex: 1 1 0%;
@@ -1206,9 +1200,6 @@ video {
 }
 .overflow-hidden {
   overflow: hidden;
-}
-.overflow-y-auto {
-  overflow-y: auto;
 }
 .overflow-x-hidden {
   overflow-x: hidden;

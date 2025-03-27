@@ -10,6 +10,7 @@ from model_downloader import load_yolo_model
 import time
 import threading
 from queue import Queue, Empty
+import pyttsx3  # Make sure to install via: pip install pyttsx3
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -446,6 +447,18 @@ def detect():
         # Filter detections to remove false positives
         filtered_detections = filter_detections(detections)
         logger.info(f"Detected {len(filtered_detections)} objects after filtering")
+        
+        # Use pyttsx3 to speak aloud the detected object names on the end machine
+        if len(filtered_detections) > 0:
+            try:
+                engine = pyttsx3.init()
+                # Build a phrase listing all detected objects
+                objects = ", ".join(det['class'] for det in filtered_detections)
+                phrase = f"Detected objects: {objects}"
+                engine.say(phrase)
+                engine.runAndWait()
+            except Exception as tts_e:
+                logger.warning(f"Text-to-Speech playback failed: {tts_e}")
 
         return jsonify({
             "detections": filtered_detections,
@@ -532,6 +545,31 @@ def api_status():
         "model": "YOLOv8x-seg" if model is not None else "not loaded",
         "timestamp": time.time()
     })
+
+def speech_worker():
+    """
+    Background worker that every 5 seconds speaks out the current detections.
+    For each detection, it speaks: "Detected <object> in quadrant <quadrant>"
+    """
+    last_spoken = []  # Hold last spoken detections
+    engine = pyttsx3.init()
+    while True:
+        time.sleep(5)  # Wait 5 seconds before speaking again
+        # Get current filtered detections from our global detection_state
+        current, _ = detection_state.get_detections()
+        if not current:
+            continue
+        # Check for new detections or changes
+        if current != last_spoken:
+            for det in current:
+                phrase = f"Detected {det['class']} in quadrant {det['quadrant']}"
+                engine.say(phrase)
+            engine.runAndWait()
+            last_spoken = current[:]  # Update last spoken copy
+
+# Start the speech worker as a daemon thread
+speech_thread = threading.Thread(target=speech_worker, daemon=True)
+speech_thread.start()
 
 if __name__ == '__main__':
     try:

@@ -185,6 +185,7 @@ const WebcamDetection = () => {
   const [framerate, setFramerate] = useState<number>(2); // Frames per second
   const processingRef = useRef<boolean>(false);
   const lastDetectionTimeRef = useRef<number>(0);
+  const [displayedDetections, setDisplayedDetections] = useState<Detection[]>([]);
 
   // Initialize webcam
   useEffect(() => {
@@ -465,6 +466,21 @@ const WebcamDetection = () => {
     setFramerate(newRate);
   };
 
+  // Append new detections every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDisplayedDetections(prev => [...prev, ...detectionResults]);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [detectionResults]);
+
+  // Instead, use a single useEffect to append new detections when detectionResults updates
+  useEffect(() => {
+    if (detectionResults.length > 0) {
+      setDisplayedDetections(prev => [...prev, ...detectionResults]);
+    }
+  }, [detectionResults]);
+
   return (
     <div className="relative rounded-lg overflow-hidden shadow-2xl bg-black/30 backdrop-blur-sm border border-white/10">
       <div className="aspect-video relative">
@@ -476,7 +492,7 @@ const WebcamDetection = () => {
           className="absolute inset-0 w-full h-full object-cover"
         />
         
-        {/* Canvas overlay for drawing detections */}
+        {/* Canvas overlay for drawing grid/detections */}
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full object-cover"
@@ -506,27 +522,27 @@ const WebcamDetection = () => {
             </button>
           </div>
         </div>
-        
-        {/* Detections panel */}
-        <div className="absolute bottom-0 right-0 max-w-xs bg-black/60 text-white p-2 text-sm max-h-32 overflow-y-auto">
-          {detectionResults.length === 0 ? (
-            <p className="italic text-gray-400">No objects detected</p>
-          ) : (
-            <div>
-              <p className="font-bold mb-1 text-cyan-300">Detected {detectionResults.length} objects:</p>
-              <ul className="space-y-1">
-                {detectionResults.map((det, idx) => (
-                  <li key={idx} className="flex items-center">
-                    <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 mr-2"></span>
-                    <span className="font-medium">{det.class}</span>
-                    <span className="text-cyan-300 mx-1">({Math.round(det.confidence * 100)}%)</span>
-                    <span className="text-xs text-gray-400">Q{det.quadrant}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+      </div>
+
+      {/* Detection output panel rendered in the UI */}
+      <div className="mt-4 p-4 bg-gray-800 text-white rounded">
+        <h3 className="text-lg font-semibold mb-2">results</h3>
+        {displayedDetections.length === 0 ? (
+          <p className="italic text-gray-400">No objects detected</p>
+        ) : (
+          <ul className="space-y-1">
+            {displayedDetections.map((det, idx) => (
+              <li key={idx} className="flex items-center">
+                <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 mr-2"></span>
+                <span className="font-medium">{det.class}</span>
+                <span className="text-cyan-300 mx-1">
+                  ({Math.round(det.confidence * 100)}%)
+                </span>
+                <span className="text-xs text-gray-400">Q{det.quadrant}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
