@@ -6,8 +6,8 @@ import cv2
 import logging
 import torch
 from concurrent.futures import ThreadPoolExecutor
-from model_downloader import load_yolo_model  # Import the model loading function
-import sound  # Import the sound module
+from model_downloader import load_yolo_model
+import sound
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -16,11 +16,11 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:3000"]}})
 
 # Detection settings for optimal accuracy
-CONF_THRESHOLD = 0.35  # Increased confidence threshold for more precise detections
-IOU_THRESHOLD = 0.4   # Adjusted IOU threshold for better overlap handling
-IMG_SIZE = 640      # Increased to YOLOv8x's optimal input size
-MAX_OBJECTS = 50    # Maximum number of objects to detect
-CLASSES = None      # Detect all classes
+CONF_THRESHOLD = 0.35
+IOU_THRESHOLD = 0.4
+IMG_SIZE = 640
+MAX_OBJECTS = 50
+CLASSES = None
 
 # Initialize thread pool for processing
 thread_pool = ThreadPoolExecutor(max_workers=2)
@@ -31,16 +31,22 @@ logger.info("Configuring YOLOv8x for high-precision detection")
 model = None
 
 # Initialize text-to-speech engine and start worker threads
-engine = sound.initialize_tts_engine()
+engine = sound.initialize_tts_engine(use_camera=False)
 tts_thread = sound.start_tts_worker(engine)
-announcement_thread = sound.start_periodic_announcement()
+
+# Completely disable periodic announcements that might try to access camera
+# Replace this line to make it more explicit:
+# announcement_thread = sound.start_periodic_announcement(use_camera=False)
+# With:
+logger.info("Starting TTS without camera access")
+announcement_thread = None  # Don't start the announcement thread that might try to access camera
 
 @app.before_request
 def load_model():
     """Load model before the first request"""
     global model
     if model is None:
-        model = load_yolo_model(model_name='yolov8seg')  # or use a smaller model like 'yolov8n'
+        model = load_yolo_model(model_name='yolov8seg')
         logger.info("YOLOv8x-seg model loaded and ready")
 
 def enhance_image(img):

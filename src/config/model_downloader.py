@@ -1,7 +1,9 @@
+import torch
 import os
+import logging
 import urllib.request
-#from pathlib import Path
-from ultralytics import YOLO
+
+logger = logging.getLogger(__name__)
 
 # Model URLs - you can choose the appropriate one
 MODEL_URLS = {
@@ -31,40 +33,54 @@ def download_model(model_name='yolov8x', models_dir='models'):
     
     # Check if model already exists
     if not os.path.exists(model_path):
-        print(f"Downloading {model_name} model...")
+        logger.info(f"Downloading {model_name} model...")
         if model_name not in MODEL_URLS:
             raise ValueError(f"Model {model_name} not found in available models")
         
         # Download the model
         try:
             urllib.request.urlretrieve(MODEL_URLS[model_name], model_path)
-            print(f"Model downloaded to {model_path}")
+            logger.info(f"Model downloaded to {model_path}")
         except Exception as e:
-            print(f"Error downloading model: {e}")
+            logger.error(f"Error downloading model: {e}")
             raise
     else:
-        print(f"Model already exists at {model_path}")
+        logger.info(f"Model already exists at {model_path}")
     
     return model_path
 
-# Load model function
-def load_yolo_model(model_name='yolov8x'):
-    """
-    Downloads (if needed) and loads the YOLO model
-    
-    Args:
-        model_name: Name of the model to load
-        
-    Returns:
-        Loaded YOLO model
-    """
-    model_path = download_model(model_name)
-    
-    # Load the model
+def load_yolo_model(model_name='yolov8seg', device='cuda'):
+    """Load a YOLO model and return it for inference."""
     try:
-        model = YOLO(model_path)
-        print(f"Model {model_name} loaded successfully")
+        # Check if CUDA is available
+        if not torch.cuda.is_available() and device == 'cuda':
+            logger.warning("CUDA not available, using CPU instead")
+            device = 'cpu'
+        
+        # Import here to avoid importing unnecessary modules
+        from ultralytics import YOLO
+        
+        logger.info(f"Loading {model_name} model on {device}...")
+        
+        # Path to model weights
+        weights_path = f'weights/{model_name}.pt'
+        
+        # Check if model exists, if not download it
+        if not os.path.exists(weights_path):
+            os.makedirs('weights', exist_ok=True)
+            logger.info(f"Model not found, downloading {model_name}...")
+            # This will download the model if it doesn't exist
+            model = YOLO(model_name)
+        else:
+            logger.info(f"Loading model from {weights_path}")
+            model = YOLO(weights_path)
+        
+        # Move model to device
+        model.to(device)
+        
+        logger.info(f"Model {model_name} loaded successfully")
         return model
+    
     except Exception as e:
-        print(f"Error loading model: {e}")
+        logger.error(f"Error loading model: {e}")
         raise

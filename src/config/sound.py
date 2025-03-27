@@ -1,56 +1,73 @@
 import cv2
-# import requests
-# import numpy as np
 import pyttsx3
 import threading
 import time
 from queue import Queue
 from ultralytics import YOLO
+import queue
+import logging
 
 # Load YOLOv8 model
-model = YOLO("yolov8n.pt")  # Use 'yolov8s.pt' for better accuracy
+model = YOLO("yolov8x.pt")  # Use 'yolov8s.pt' for better accuracy
 
-# ESP32-CAM Stream URL
-# ESP32_STREAM_URL = "http://172.16.68.190:81/stream"
+# Global variables
+tts_queue = queue.Queue()
+running = True
+last_objects = set()  # This can stay as it's just keeping track of announced objects
+
+logger = logging.getLogger(__name__)
+
+def initialize_tts_engine(use_camera=False):
+    """Initialize text-to-speech engine"""
+    try:
+        engine = pyttsx3.init()
+        engine.setProperty('rate', 150)
+        engine.setProperty('volume', 0.9)
+        print("Text-to-speech engine initialized successfully.")
+        return engine
+    except Exception as e:
+        print(f"Error initializing text-to-speech engine: {e}")
+        return None
 
 # Initialize text-to-speech engine
-try:
-    engine = pyttsx3.init(driverName="espeak")
-    engine.setProperty('rate', 150)  # Speed of speech
-    engine.setProperty('volume', 1.0)  # Volume level
-    print("Text-to-speech engine initialized successfully.")
-except Exception as e:
-    print(f"Failed to initialize text-to-speech engine: {e}")
-    engine = None
+engine = initialize_tts_engine()
 
-# Queue for text-to-speech requests
-tts_queue = Queue()
+def speak(text):
+    """Add text to the speaking queue"""
+    if text:
+        tts_queue.put(text)
 
-# Function to process text-to-speech requests
-def tts_worker():
-    while True:
-        text = tts_queue.get()
-        if text is None:
-            break
-        if engine:
-            try:
-                engine.say(text)
-                engine.runAndWait()
-            except Exception as e:
-                print(f"Failed to produce speech: {e}")
-        tts_queue.task_done()
+def tts_worker(engine):
+    """Text-to-speech worker thread"""
+    while running:
+        try:
+            if not tts_queue.empty():
+                text = tts_queue.get()
+                if engine and text:
+                    engine.say(text)
+                    engine.runAndWait()
+                tts_queue.task_done()
+            else:
+                time.sleep(0.1)
+        except Exception as e:
+            print(f"Error in TTS worker: {e}")
+            time.sleep(1)
+
+def start_tts_worker(engine):
+    """Start the TTS worker thread"""
+    worker_thread = threading.Thread(target=tts_worker, args=(engine,), daemon=True)
+    worker_thread.start()
+    return worker_thread
+
+def stop_tts_worker(thread):
+    """Stop the TTS worker thread"""
+    global running
+    running = False
+    if thread and thread.is_alive():
+        thread.join(timeout=1)
 
 # Start the text-to-speech worker thread
-tts_thread = threading.Thread(target=tts_worker)
-tts_thread.daemon = True
-tts_thread.start()
-
-# Function to speak in a separate thread with a delay
-def speak(text):
-    tts_queue.put(text)
-    time.sleep(2)  # Delay between each announcement
-
-last_objects = set()  # Store last detected objects to avoid repeated speech
+tts_thread = start_tts_worker(engine)
 
 # Function to determine the quadrant of a point in the frame
 def get_quadrant(x, y, width, height):
@@ -63,21 +80,30 @@ def get_quadrant(x, y, width, height):
     else:
         return "bottom-right"
 
-# Function to announce all detected objects every 3 seconds
-def periodic_announcement():
-    #global last_objects  # Declare last_objects as global
-    while True:
-        time.sleep(3)
-        print("Periodic announcement thread running...")
-        if last_objects:
-            sentence = ", ".join(last_objects)
-            print(f"Repeating: {sentence}")
-            speak(sentence)
+def periodic_announcement(use_camera=False):
+    """Function to make periodic announcements"""
+    global running
+    
+    # Remove any camera initialization code here
+    # Don't use cv2.VideoCapture() at all
+    
+    if use_camera:
+        logger.warning("Camera access from backend is disabled. Use frontend camera instead.")
+        print("Camera access from backend is disabled. Use frontend camera instead.")
+    
+    while running:
+        time.sleep(30)  # Just sleep - no camera operations
+
+def start_periodic_announcement(use_camera=False):
+    """Start the periodic announcement thread"""
+    # Make sure we're always passing use_camera=False
+    use_camera = False  # Force it to be False regardless of what was passed
+    announcement_thread = threading.Thread(target=periodic_announcement, args=(use_camera,), daemon=True)
+    announcement_thread.start()
+    return announcement_thread
 
 # Start the periodic announcement thread
-announcement_thread = threading.Thread(target=periodic_announcement)
-announcement_thread.daemon = True
-announcement_thread.start()
+announcement_thread = start_periodic_announcement()
 
 # Open video stream
 cap = cv2.VideoCapture(0)
@@ -146,6 +172,5 @@ cap.release()
 cv2.destroyAllWindows()
 
 # Stop the text-to-speech worker thread
-tts_queue.put(None)
-tts_thread.join()
+stop_tts_worker(tts_thread)
 

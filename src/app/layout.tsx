@@ -4,6 +4,7 @@ import './animations.css';
 import { Navigation } from '@/components/Navigation/Navigation';
 import { Footer } from '@/components/Footer/Footer';
 import { ModelViewerScript } from '@/components/ModelViewer/ModelViewerScript';
+import { CameraProvider } from '@/components/WebcamDetection';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const poppins = Poppins({ weight: ['400', '500', '600', '700', '800'], subsets: ['latin'], variable: '--font-poppins' });
@@ -20,11 +21,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${poppins.variable}`}>
-      <ModelViewerScript />
       <body className="min-h-screen bg-black text-white overflow-x-hidden font-poppins">
-        <Navigation />
-        <main className="pt-16">{children}</main>
-        <Footer />
+        {/* Move ModelViewerScript inside the body */}
+        <ModelViewerScript />
+        <CameraProvider>
+          <Navigation />
+          <main className="pt-16">{children}</main>
+          <Footer />
+        </CameraProvider>
       </body>
     </html>
   );

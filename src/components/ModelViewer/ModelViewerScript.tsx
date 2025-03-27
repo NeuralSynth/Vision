@@ -2,12 +2,12 @@
 
 import Script from 'next/script';
 
-export const ModelViewerScript = () => {
+export function ModelViewerScript() {
   return (
-    <Script
-      src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"
+    <Script 
+      src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js" 
       type="module"
-      strategy="beforeInteractive"
+      strategy="afterInteractive"
     />
   );
-};
+}
