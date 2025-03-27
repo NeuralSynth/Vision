@@ -29,7 +29,7 @@ export const Navigation = () => {
           </div>
           <div className="flex items-center space-x-4">
             <a href="#login" className="text-blue-100 hover:text-white transition-colors font-medium">Login</a>
-            <a href="#demo" className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-md text-white font-medium hover:from-blue-600 hover:to-blue-700 transition-colors shadow-lg hover:shadow-blue-500/25">Demo</a>
+            <a href="/demo" className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 rounded-md text-white font-medium hover:from-blue-600 hover:to-blue-700 transition-colors shadow-lg hover:shadow-blue-500/25">Demo</a>
           </div>
         </div>
       </div>

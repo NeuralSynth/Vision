@@ -8,20 +8,42 @@ import { OrbitControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 
 const GlassesModel = () => {
+  const MODEL_PATH = '/components/Pricing/perceviatransparentglb.glb';
+  
   // Preload the model to avoid loading issues
-  useGLTF.preload('/components/Pricing/perceviatransparentglb.glb');
+  useGLTF.preload(MODEL_PATH);
   
   // Use try-catch to handle loading errors
   try {
-    const { scene } = useGLTF('/components/Pricing/perceviatransparentglb.glb');
+    const { scene } = useGLTF(MODEL_PATH);
+    
     useEffect(() => {
+      // Configure material properties
       scene.traverse((child) => {
-        if (child.isMesh) {
+        if ('isMesh' in child && child.isMesh) {
           child.material.transparent = true;
-          child.material.opacity = 0.8;
+          if (child.material instanceof THREE.Material) {
+            child.material.opacity = 0.8;
+          }
         }
       });
+      
+      // Cleanup function
+      return () => {
+        scene.traverse((child) => {
+          if ('isMesh' in child && child.isMesh) {
+            if (child.material) {
+              child.material.dispose();
+            }
+            if (child.geometry) {
+              child.geometry.dispose();
+            }
+          }
+        });
+        useGLTF.dispose(MODEL_PATH);
+      };
     }, [scene]);
+    
     return <primitive object={scene} scale={2} position={[0, 0, 0]} />;
   } catch (error) {
     console.error('Error loading 3D model:', error);
@@ -34,7 +56,7 @@ const FloatingCard = ({ children, delay = 0 }) => {
   useEffect(() => {
     const handleMouseMove = (e) => {
       if (!cardRef.current) return;
-      const rect = cardRef.current.getBoundingClientRect();
+      const rect = cardRef.current?.getBoundingClientRect() || new DOMRect();
       const x = (e.clientX - rect.left) / rect.width - 0.5;
       const y = (e.clientY - rect.top) / rect.height - 0.5;
       cardRef.current.style.transform = `

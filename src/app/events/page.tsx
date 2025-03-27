@@ -16,7 +16,7 @@ export default function Events() {
             transition={{ duration: 0.8 }}
           >
             <h1 className="text-7xl md:text-8xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-blue-100 to-blue-200 mb-8">
-              Coming Soon
+              Join the Waitlist
             </h1>
             <p className="text-2xl text-blue-100/80 max-w-3xl mx-auto leading-relaxed mb-12">
               We're preparing something exciting! Stay tuned for upcoming Percevia events.
