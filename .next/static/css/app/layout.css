@@ -708,6 +708,9 @@ video {
 .pointer-events-auto {
   pointer-events: auto;
 }
+.visible {
+  visibility: visible;
+}
 .fixed {
   position: fixed;
 }
@@ -815,6 +818,10 @@ video {
   margin-top: 1em;
   margin-bottom: 1em;
 }
+.mx-1 {
+  margin-left: 0.25rem;
+  margin-right: 0.25rem;
+}
 .mb-10 {
   margin-bottom: 2.5rem;
 }
@@ -871,6 +878,9 @@ video {
 }
 .mb-1 {
   margin-bottom: 0.25rem;
+}
+.mr-2 {
+  margin-right: 0.5rem;
 }
 .block {
   display: block;
@@ -947,6 +957,9 @@ video {
 .h-screen {
   height: 100vh;
 }
+.h-2 {
+  height: 0.5rem;
+}
 .max-h-32 {
   max-height: 8rem;
 }
@@ -991,6 +1004,9 @@ video {
 }
 .w-screen {
   width: 100vw;
+}
+.w-2 {
+  width: 0.5rem;
 }
 .max-w-2xl {
   max-width: 42rem;
@@ -1195,6 +1211,11 @@ video {
   margin-top: calc(2rem * calc(1 - var(--tw-space-y-reverse)));
   margin-bottom: calc(2rem * var(--tw-space-y-reverse));
 }
+.space-y-1 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(0.25rem * var(--tw-space-y-reverse));
+}
 .overflow-hidden {
   overflow: hidden;
 }
@@ -1314,6 +1335,14 @@ video {
 }
 .bg-black\/60 {
   background-color: rgb(0 0 0 / 0.6);
+}
+.bg-gray-800 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(31 41 55 / var(--tw-bg-opacity, 1));
+}
+.bg-cyan-400 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(34 211 238 / var(--tw-bg-opacity, 1));
 }
 .bg-\[radial-gradient\(circle_at_center\2c rgba\(0\2c 0\2c 0\2c 0\)_0\%\2c rgba\(0\2c 0\2c 0\2c 0\.8\)_100\%\)\] {
   background-image: radial-gradient(circle at center,rgba(0,0,0,0) 0%,rgba(0,0,0,0.8) 100%);
@@ -1635,6 +1664,10 @@ video {
   padding-top: 0.6em;
   padding-bottom: 0.6em;
 }
+.px-1 {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
 .pb-16 {
   padding-bottom: 4rem;
 }
@@ -1711,6 +1744,10 @@ video {
   font-size: 1.25rem;
   line-height: 1.75rem;
 }
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
 .font-black {
   font-weight: 900;
 }
@@ -1734,6 +1771,9 @@ video {
 }
 .uppercase {
   text-transform: uppercase;
+}
+.italic {
+  font-style: italic;
 }
 .leading-\[1\.1\] {
   line-height: 1.1;
@@ -1842,6 +1882,10 @@ video {
 }
 .text-white\/70 {
   color: rgb(255 255 255 / 0.7);
+}
+.text-cyan-300 {
+  --tw-text-opacity: 1;
+  color: rgb(103 232 249 / var(--tw-text-opacity, 1));
 }
 .no-underline {
   text-decoration-line: none;

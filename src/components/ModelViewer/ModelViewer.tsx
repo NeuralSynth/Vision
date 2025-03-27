@@ -1,6 +1,7 @@
 'use client';
 
 import './model-viewer.css';
+import React, { forwardRef, useRef } from 'react';
 
 // Add type declaration for the model-viewer element
 declare global {
@@ -16,61 +17,52 @@ declare global {
         'tone-mapping'?: string;
         'shadow-intensity'?: number;
         exposure?: number;
-        'auto-rotate'?: boolean;
+        'auto-rotate'?: boolean | undefined;
       }, HTMLElement>;
     }
   }
 }
 
-interface ModelViewerProps {
+export interface ModelViewerProps {
   src: string;
-  poster?: string;
-  alt?: string;
+  poster: string;
+  alt: string;
   autoRotate?: boolean;
-  cameraControls?: boolean;
-  arModes?: string;
-  shadowIntensity?: number;
-  toneMapping?: string;
-  exposure?: number;
-  className?: string;
+  // Add any additional props you need, such as className, style, etc.
 }
 
-export const ModelViewer = ({
-  src,
-  poster = '',
-  alt = 'A 3D model',
-  autoRotate = false,
-  cameraControls = true,
-  arModes = 'webxr scene-viewer quick-look',
-  shadowIntensity = 0.76,
-  toneMapping = 'neutral',
-  exposure = 1,
-  className = '',
-}: ModelViewerProps) => {
+const ModelViewer = forwardRef<HTMLElement, ModelViewerProps>((props, ref) => {
+  const { src, poster, alt, autoRotate } = props;
+
   return (
-    <div className={className}>
-      <model-viewer
-        src={src}
-        poster={poster}
-        alt={alt}
-        ar
-        ar-modes={arModes}
-        camera-controls={cameraControls}
-        tone-mapping={toneMapping}
-        shadow-intensity={shadowIntensity}
-        exposure={exposure}
-        auto-rotate={autoRotate}
-      >
-        <div className="progress-bar hide" slot="progress-bar">
-          <div className="update-bar"></div>
-        </div>
-        <button slot="ar-button" id="ar-button">
-          View in your space
-        </button>
-        <div id="ar-prompt">
-          <img src="https://modelviewer.dev/shared-assets/icons/hand.png" alt="AR prompt" />
-        </div>
-      </model-viewer>
-    </div>
+    // The underlying HTML element, note the tag name should match the model-viewer component
+    <model-viewer
+      ref={ref}
+      src={src}
+      poster={poster}
+      alt={alt}
+      auto-rotate={autoRotate}
+      // ...existing props if any...
+    />
+  );
+});
+
+ModelViewer.displayName = 'ModelViewer';
+
+export { ModelViewer };
+
+const App = () => {
+  const modelViewerRef = useRef<HTMLElement>(null);
+
+  return (
+    <ModelViewer
+      ref={modelViewerRef}
+      src="/models/glasses.glb"
+      poster="/models/glasses-poster.webp"
+      alt="Percevia Smart Glasses"
+      autoRotate={true}
+    />
   );
 };
+
+export default App;

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Head from 'next/head';
 import { useCameraStream } from '@/components/WebcamDetection';
+import { useDetectionSync } from '@/hooks/useDetectionSync';
 
 // Dynamically import components that use browser APIs with ssr: false
 const ModelViewer = dynamic(
@@ -26,12 +27,13 @@ export default function DemoPage() {
   const [activeFeature, setActiveFeature] = useState('vision');
   const [isMounted, setIsMounted] = useState(false);
   const [modelViewerLoaded, setModelViewerLoaded] = useState(false);
-  const { getStream, detections } = useCameraStream();
+  const { getStream } = useCameraStream();
+  const { detections, objectCounts, lastUpdateTime, hasDetections } = useDetectionSync();
   const modelViewerRef = useRef(null);
 
   useEffect(() => {
     setIsMounted(true);
-    
+
     // Initialize camera stream when component mounts
     if (isMounted) {
       getStream().catch(err => {
@@ -55,19 +57,10 @@ export default function DemoPage() {
     }
   }, [isMounted, getStream, modelViewerLoaded]);
 
-  // Function to count objects by class
-  const getObjectCounts = () => {
-    if (!detections || detections.length === 0) return {};
-    
-    const counts: Record<string, number> = {};
-    detections.forEach(det => {
-      counts[det.class] = (counts[det.class] || 0) + 1;
-    });
-    
-    return counts;
-  };
-
-  const objectCounts = getObjectCounts();
+  // Log detections in render to track updates
+  useEffect(() => {
+    console.log("Demo page received detections:", detections?.length || 0);
+  }, [detections]);
 
   const features = [
     {
@@ -96,10 +89,10 @@ export default function DemoPage() {
         {/* Remove any auto-preloading by indicating we'll load it ourselves */}
         <meta name="model-viewer-script-handled" content="true" />
       </Head>
-      
+
       <div className="min-h-screen bg-black">
         {isMounted && <AnimatedBackground />}
-        
+
         <div className="relative z-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
             <div className="text-center">
@@ -119,12 +112,12 @@ export default function DemoPage() {
                 </h2>
                 <div className="max-w-3xl mx-auto">
                   <WebcamDetection />
-                  
-                  {/* Detection analytics */}
-                  {detections && detections.length > 0 && (
+
+                  {/* Detection analytics - now uses synchronized state */}
+                  {hasDetections ? (
                     <div className="mt-6 bg-black/30 backdrop-blur-sm border border-white/10 rounded-lg p-4">
                       <h3 className="text-xl font-semibold text-white mb-3">
-                        Detection Results
+                        Detection Results (Updated: {lastUpdateTime.toLocaleTimeString()})
                       </h3>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -149,6 +142,10 @@ export default function DemoPage() {
                         </div>
                       </div>
                     </div>
+                  ) : (
+                    <div className="mt-6 bg-black/30 backdrop-blur-sm border border-white/10 rounded-lg p-4 text-center">
+                      <p className="text-gray-300">No objects detected yet. Try moving objects in front of the camera.</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -157,23 +154,21 @@ export default function DemoPage() {
             <div className="grid md:grid-cols-2 gap-12 items-center mb-24">
               <div className="relative h-[400px] w-full">
                 {isMounted && modelViewerLoaded && (
-                  <ModelViewer 
+                  <ModelViewer
                     ref={modelViewerRef}
-                    src="/models/glasses.glb" 
-                    poster="/models/glasses-poster.webp" 
-                    alt="Percevia Smart Glasses" 
-                    autoRotate={true} 
+                    src="/models/glasses.glb"
+                    poster="/models/glasses-poster.webp"
+                    alt="Percevia Smart Glasses"
+                    autoRotate={true}
                   />
                 )}
               </div>
-              
+
               <div className="space-y-8">
                 {features.map((feature) => (
                   <div
                     key={feature.id}
-                    className={`p-6 rounded-lg border border-white/10 backdrop-blur-sm transition-all duration-300 hover:border-blue-500/50 cursor-pointer ${
-                      activeFeature === feature.id ? 'bg-blue-500/10 border-blue-500' : 'bg-black/50'
-                    }`}
+                    className={`p-6 rounded-lg border border-white/10 backdrop-blur-sm transition-all duration-300 hover:border-blue-500/50 cursor-pointer ${activeFeature === feature.id ? 'bg-blue-500/10 border-blue-500' : 'bg-black/50'}`}
                     onClick={() => setActiveFeature(feature.id)}
                     data-aos={feature.animation}
                   >

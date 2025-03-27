@@ -28,6 +28,7 @@ export type CameraContextType = {
   frameData: string | null; // Base64 encoded current frame
   detections: Detection[];
   captureFrame: () => Promise<string | null>; // Method to capture a frame
+  updateDetections: (detections: Detection[]) => void; // Method to update detections
 };
 
 // Create the context with default values
@@ -37,7 +38,8 @@ export const CameraContext = createContext<CameraContextType>({
   error: null,
   frameData: null,
   detections: [],
-  captureFrame: async () => null
+  captureFrame: async () => null,
+  updateDetections: () => {}
 });
 
 // Provider component for camera access
@@ -83,7 +85,7 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
     const video = videoRef.current;
     const canvas = canvasRef.current;
     
-    // Set canvas dimensions to match video
+    // Ensure canvas size exactly matches current video dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     
@@ -93,18 +95,32 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
     
+    // Clear the canvas first
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     
-    // Convert to base64
-    const imageData = canvas.toDataURL('image/jpeg', 0.8);
-    const base64Data = imageData.split(',')[1];
-    
-    setFrameData(base64Data);
-    return base64Data;
+    try {
+      // Convert to base64 with higher quality (0.95 instead of 0.8)
+      const imageData = canvas.toDataURL('image/jpeg', 0.95);
+      const base64Data = imageData.split(',')[1];
+      
+      // Verify we have data
+      if (!base64Data || base64Data.length < 1000) {
+        console.warn("Generated base64 data seems too small:", base64Data?.length);
+        return null;
+      }
+      
+      setFrameData(base64Data);
+      return base64Data;
+    } catch (err) {
+      console.error("Error encoding image:", err);
+      return null;
+    }
   };
 
   // Update detections state with new data
   const updateDetections = (newDetections: Detection[]) => {
+    console.log("Updating context detections:", newDetections.length);
     setDetections(newDetections);
   };
 
@@ -137,7 +153,8 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
       error, 
       frameData, 
       detections, 
-      captureFrame 
+      captureFrame,
+      updateDetections  // Add the updateDetections function to the context
     }}>
       {children}
       {videoRef.current && 
@@ -164,7 +181,10 @@ const WebcamDetection = () => {
   const [status, setStatus] = useState<string>('Initializing...');
   const [isLoading, setIsLoading] = useState(false);
   const animationFrameRef = useRef<number | null>(null);
-  const { getStream, stream, captureFrame } = useCameraStream();
+  const { getStream, stream, captureFrame, updateDetections } = useCameraStream();
+  const [framerate, setFramerate] = useState<number>(2); // Frames per second
+  const processingRef = useRef<boolean>(false);
+  const lastDetectionTimeRef = useRef<number>(0);
 
   // Initialize webcam
   useEffect(() => {
@@ -174,9 +194,21 @@ const WebcamDetection = () => {
         const cameraStream = await getStream();
         if (cameraStream && videoRef.current) {
           videoRef.current.srcObject = cameraStream;
-          setStatus('Camera ready');
-          // Auto-start detection after camera is ready
-          setIsDetecting(true);
+          
+          // Wait for video to be ready
+          videoRef.current.onloadedmetadata = () => {
+            if (!videoRef.current) return;
+            
+            // Set canvas dimensions to match video
+            if (canvasRef.current) {
+              canvasRef.current.width = videoRef.current.videoWidth;
+              canvasRef.current.height = videoRef.current.videoHeight;
+            }
+            
+            setStatus('Camera ready');
+            // Auto-start detection after camera is ready
+            setTimeout(() => setIsDetecting(true), 1000);
+          };
         }
       } catch (err) {
         console.error('Error setting up camera:', err);
@@ -197,6 +229,10 @@ const WebcamDetection = () => {
   // Function to send frame to backend and get detections
   const processFrame = async (frameData: string): Promise<DetectionResult | null> => {
     try {
+      // Set processing flag
+      processingRef.current = true;
+      
+      console.log("Sending frame to backend for detection");
       const response = await fetch('http://localhost:5000/detect', {
         method: 'POST',
         headers: {
@@ -209,9 +245,17 @@ const WebcamDetection = () => {
         throw new Error(`Detection failed: ${response.status}`);
       }
       
-      return await response.json();
+      const result = await response.json();
+      console.log("Got detection results:", result);
+      
+      // Clear processing flag
+      processingRef.current = false;
+      lastDetectionTimeRef.current = Date.now();
+      
+      return result;
     } catch (error) {
       console.error('Error processing frame:', error);
+      processingRef.current = false;
       return null;
     }
   };
@@ -221,11 +265,25 @@ const WebcamDetection = () => {
     let isActive = true;
     
     const detectFrame = async () => {
-      if (!isDetecting || !captureFrame || isLoading) {
-        animationFrameRef.current = requestAnimationFrame(detectFrame);
+      // Don't try to detect if not active, loading or already processing
+      if (!isDetecting || !captureFrame || isLoading || processingRef.current) {
+        // Schedule next frame with delay based on framerate
+        setTimeout(() => {
+          if (isActive) requestAnimationFrame(detectFrame);
+        }, 1000 / framerate);
         return;
       }
-
+      
+      // Throttle detection rate - respect the framerate setting
+      const now = Date.now();
+      const timeSinceLastDetection = now - lastDetectionTimeRef.current;
+      if (timeSinceLastDetection < (1000 / framerate)) {
+        setTimeout(() => {
+          if (isActive) requestAnimationFrame(detectFrame);
+        }, 1000 / framerate - timeSinceLastDetection);
+        return;
+      }
+      
       setIsLoading(true);
       
       try {
@@ -239,7 +297,17 @@ const WebcamDetection = () => {
           const result = await processFrame(frame);
           
           if (result && isActive) {
+            console.log("Detection results:", result.detections.length, "objects found");
+            
+            // Update local state first
             setDetectionResults(result.detections);
+            
+            // Then update context state with a slight delay to ensure proper rendering
+            setTimeout(() => {
+              updateDetections(result.detections);
+              console.log("Context updated with new detections");
+            }, 0);
+            
             setStatus(`Detected ${result.detections.length} objects`);
           }
         }
@@ -254,10 +322,10 @@ const WebcamDetection = () => {
         }
       }
       
-      // Continue detection loop
-      if (isActive) {
-        animationFrameRef.current = requestAnimationFrame(detectFrame);
-      }
+      // Continue detection loop with controlled framerate
+      setTimeout(() => {
+        if (isActive) requestAnimationFrame(detectFrame);
+      }, 1000 / framerate);
     };
 
     detectFrame();
@@ -268,48 +336,69 @@ const WebcamDetection = () => {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isDetecting, captureFrame, isLoading]);
+  }, [isDetecting, captureFrame, isLoading, framerate, updateDetections]);
 
-  // Draw bounding boxes on canvas
+  // Draw bounding boxes on canvas - Improved rendering
   useEffect(() => {
-    if (!canvasRef.current || !videoRef.current || !detectionResults.length) return;
+    if (!canvasRef.current || !videoRef.current) return;
     
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
+    // Make sure canvas dimensions match video dimensions
+    if (videoRef.current.videoWidth !== canvas.width || 
+        videoRef.current.videoHeight !== canvas.height) {
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      console.log(`Updated canvas dimensions to ${canvas.width}x${canvas.height}`);
+    }
+    
     // Clear previous drawings
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     // Draw video frame first
-    if (videoRef.current) {
-      ctx.drawImage(
-        videoRef.current, 
-        0, 0, 
-        canvas.width, 
-        canvas.height
-      );
-    }
+    ctx.drawImage(
+      videoRef.current, 
+      0, 0, 
+      canvas.width, 
+      canvas.height
+    );
+    
+    // Log detection count before drawing
+    console.log(`Drawing ${detectionResults.length} detection boxes on canvas`);
     
     // Draw each detection
-    detectionResults.forEach(detection => {
+    detectionResults.forEach((detection, index) => {
       const [x, y, width, height] = detection.bbox;
+      console.log(`Detection ${index}: ${detection.class} at (${x},${y},${width},${height})`);
       
-      // Draw bounding box
-      ctx.strokeStyle = '#00FFFF';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(x, y, width, height);
-      
-      // Draw label
-      ctx.fillStyle = 'rgba(0, 255, 255, 0.7)';
-      ctx.fillRect(x, y - 25, 160, 25);
-      ctx.fillStyle = '#000000';
-      ctx.font = '16px Arial';
-      ctx.fillText(
-        `${detection.class} (${Math.round(detection.confidence * 100)}%)`,
-        x + 5, 
-        y - 7
-      );
+      try {
+        // Draw bounding box with more vibrant color
+        ctx.strokeStyle = '#00FFFF';
+        ctx.lineWidth = 3;  // Thicker lines
+        ctx.strokeRect(x, y, width, height);
+        
+        // Create more visible label with better contrast
+        const text = `${detection.class} (${Math.round(detection.confidence * 100)}%)`;
+        ctx.font = 'bold 16px Arial';
+        const textMetrics = ctx.measureText(text);
+        const labelWidth = Math.max(160, textMetrics.width + 20);
+        
+        // Draw label background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';  // Dark background for better contrast
+        ctx.fillRect(x, y - 30, labelWidth, 30);
+        
+        // Draw border for label
+        ctx.strokeStyle = '#00FFFF';
+        ctx.strokeRect(x, y - 30, labelWidth, 30);
+        
+        // Draw label text
+        ctx.fillStyle = '#FFFFFF';  // White text for visibility
+        ctx.fillText(text, x + 5, y - 10);
+      } catch (err) {
+        console.error("Error drawing detection:", err);
+      }
     });
   }, [detectionResults]);
 
@@ -317,6 +406,11 @@ const WebcamDetection = () => {
   const toggleDetection = () => {
     setIsDetecting(prev => !prev);
     setStatus(isDetecting ? 'Detection paused' : 'Detection running');
+  };
+
+  // Framerate control
+  const adjustFramerate = (newRate: number) => {
+    setFramerate(newRate);
   };
 
   return (
@@ -334,39 +428,66 @@ const WebcamDetection = () => {
         <canvas
           ref={canvasRef}
           className="absolute inset-0 w-full h-full object-cover"
-          width={640}
-          height={480}
         />
         
         {/* Status overlay */}
         <div className="absolute top-0 left-0 right-0 bg-black/60 text-white p-2 flex justify-between items-center">
           <span>{status}</span>
-          <button
-            onClick={toggleDetection}
-            className="px-3 py-1 bg-blue-500 hover:bg-blue-600 rounded text-sm"
-          >
-            {isDetecting ? 'Pause' : 'Start'} Detection
-          </button>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center">
+              <span className="mr-2 text-xs">Speed:</span>
+              <select 
+                value={framerate} 
+                onChange={(e) => adjustFramerate(Number(e.target.value))}
+                className="bg-gray-800 text-white text-xs rounded px-1 py-1"
+              >
+                <option value="1">Slow (1 FPS)</option>
+                <option value="2">Normal (2 FPS)</option>
+                <option value="5">Fast (5 FPS)</option>
+              </select>
+            </div>
+            <button
+              onClick={toggleDetection}
+              className="px-3 py-1 bg-blue-500 hover:bg-blue-600 rounded text-sm"
+            >
+              {isDetecting ? 'Pause' : 'Start'} Detection
+            </button>
+          </div>
         </div>
         
         {/* Detections panel */}
         <div className="absolute bottom-0 right-0 max-w-xs bg-black/60 text-white p-2 text-sm max-h-32 overflow-y-auto">
           {detectionResults.length === 0 ? (
-            <p>No objects detected</p>
+            <p className="italic text-gray-400">No objects detected</p>
           ) : (
-            <ul>
-              {detectionResults.map((det, idx) => (
-                <li key={idx} className="mb-1">
-                  {det.class} ({Math.round(det.confidence * 100)}%) - Quadrant {det.quadrant}
-                </li>
-              ))}
-            </ul>
+            <div>
+              <p className="font-bold mb-1 text-cyan-300">Detected {detectionResults.length} objects:</p>
+              <ul className="space-y-1">
+                {detectionResults.map((det, idx) => (
+                  <li key={idx} className="flex items-center">
+                    <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 mr-2"></span>
+                    <span className="font-medium">{det.class}</span>
+                    <span className="text-cyan-300 mx-1">({Math.round(det.confidence * 100)}%)</span>
+                    <span className="text-xs text-gray-400">Q{det.quadrant}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       </div>
     </div>
   );
 };
+
+// Custom root wrapper to ensure context is available globally
+export function CameraProviderRoot() {
+  return (
+    <CameraProvider>
+      <div id="camera-provider-initialized" data-testid="camera-provider-root" />
+    </CameraProvider>
+  );
+}
 
 // Wrapped export to provide camera access
 export default function WebcamDetectionWithCamera() {

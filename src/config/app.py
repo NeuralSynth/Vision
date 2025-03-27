@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 from model_downloader import load_yolo_model
 import time
 import threading
-from collections import deque
 from queue import Queue, Empty
 
 logging.basicConfig(level=logging.INFO)
@@ -19,11 +18,12 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": ["http://localhost:5173", "http://localhost:3000"]}})
 
 # Detection settings for optimal accuracy
-CONF_THRESHOLD = 0.5
-IOU_THRESHOLD = 0.4
+CONF_THRESHOLD = 0.05  # Further lowered from 0.15 to detect more objects
+IOU_THRESHOLD = 0.3  # Lowered from 0.4 to be more lenient with overlapping objects
 IMG_SIZE = 640
 MAX_OBJECTS = 50
 CLASSES = None
+DEBUG_MODE = True  # Enable debug mode to save sample images
 
 # Global state management with thread safety
 class DetectionState:
@@ -88,14 +88,20 @@ def load_model():
             
             # Check model compatibility by running a test inference
             test_img = np.zeros((640, 640, 3), dtype=np.uint8)
+            # Add a simple rectangle to test detection
+            cv2.rectangle(test_img, (100, 100), (400, 400), (255, 255, 255), -1)
             test_tensor = torch.from_numpy(test_img).float()
             test_tensor = test_tensor.permute(2, 0, 1).unsqueeze(0) / 255.0
             
             # Run a test prediction with minimal parameters and error catching
             try:
                 with torch.no_grad():  # Disable gradient calculation for inference
-                    _ = model(test_tensor, verbose=False)
-                logger.info("Model validation successful")
+                    results = model(test_tensor, verbose=False)
+                # Verify we can access boxes or masks attributes
+                if hasattr(results[0], 'boxes') and len(results[0].boxes) > 0:
+                    logger.info(f"Model validation successful. Found {len(results[0].boxes)} test objects.")
+                else:
+                    logger.info("Model validation successful. No test objects detected, but model ran without errors.")
             except Exception as test_e:
                 logger.error(f"Model validation failed: {test_e}")
                 # Try again with a different configuration to avoid the 'bn' attribute error
@@ -138,22 +144,48 @@ def preprocess_image(img_data):
         nparr = np.frombuffer(img_bytes, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
-        # Enhance image quality
-        img = enhance_image(img)
+        if DEBUG_MODE:
+            cv2.imwrite("/tmp/original_image.jpg", img)
+            logger.info(f"Saved original image with shape {img.shape}")
+        
+        # Convert color space for better detection
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        
+        # Apply more aggressive enhancement
+        # Increase brightness and contrast
+        alpha = 1.3  # Contrast control (1.0 means no change)
+        beta = 5     # Brightness control (0 means no change)
+        img_enhanced = cv2.convertScaleAbs(img_rgb, alpha=alpha, beta=beta)
+        
+        # Apply adaptive histogram equalization for better feature visibility
+        lab = cv2.cvtColor(img_enhanced, cv2.COLOR_RGB2LAB)
+        l, a, b = cv2.split(lab)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        cl = clahe.apply(l)
+        enhanced_lab = cv2.merge((cl, a, b))
+        img_enhanced = cv2.cvtColor(enhanced_lab, cv2.COLOR_LAB2RGB)
+        
+        if DEBUG_MODE:
+            cv2.imwrite("/tmp/enhanced_image.jpg", cv2.cvtColor(img_enhanced, cv2.COLOR_RGB2BGR))
+            logger.info("Saved enhanced image")
         
         # Resize image to optimal size while maintaining aspect ratio
-        h, w = img.shape[:2]
+        h, w = img_enhanced.shape[:2]
         scale = min(IMG_SIZE/h, IMG_SIZE/w)
         if scale != 1:
             new_h, new_w = int(h * scale), int(w * scale)
-            img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+            img_enhanced = cv2.resize(img_enhanced, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
         
-        return img, (h, w)
+        if DEBUG_MODE:
+            cv2.imwrite("/tmp/resized_image.jpg", cv2.cvtColor(img_enhanced, cv2.COLOR_RGB2BGR))
+            logger.info(f"Saved resized image with shape {img_enhanced.shape}")
+        
+        return img_enhanced, (h, w)
     except Exception as e:
         logger.error(f"Error in image preprocessing: {e}")
         raise
 
-def filter_detections(detections, min_area=100):
+def filter_detections(detections, min_area=10):  # Further reduced minimum area for smaller objects
     """Filter out likely false positives"""
     filtered = []
     for det in detections:
@@ -161,6 +193,10 @@ def filter_detections(detections, min_area=100):
         area = w * h
         if area >= min_area and det["confidence"] >= CONF_THRESHOLD:
             filtered.append(det)
+    
+    if len(detections) > 0 and len(filtered) == 0:
+        logger.warning(f"All {len(detections)} detections were filtered out. Check filter parameters.")
+    
     return filtered
 
 def process_detection(img):
@@ -178,13 +214,13 @@ def process_detection(img):
         padded_img = np.zeros((new_h, new_w, 3), dtype=np.uint8)
         padded_img[:h, :w, :] = img
         
-        # Convert to RGB if in BGR format (OpenCV uses BGR by default)
-        if img.shape[2] == 3:
-            padded_img = cv2.cvtColor(padded_img, cv2.COLOR_BGR2RGB)
-            
+        if DEBUG_MODE:
+            cv2.imwrite("/tmp/padded_image.jpg", cv2.cvtColor(padded_img, cv2.COLOR_RGB2BGR))
+            logger.info(f"Saved padded image with shape {padded_img.shape}")
+        
         # Use a more robust approach to handle the tensor conversion
         try:
-            # Convert to tensor format
+            # Convert to tensor format - image is already in RGB format
             img_tensor = torch.from_numpy(padded_img).float()
             img_tensor = img_tensor.permute(2, 0, 1)  # HWC to CHW
             img_tensor = img_tensor.unsqueeze(0)  # Add batch dimension
@@ -193,7 +229,19 @@ def process_detection(img):
             # Run inference with error catching
             with torch.no_grad():  # Disable gradient tracking for inference
                 logger.info(f"Running inference on tensor of shape {img_tensor.shape}")
-                results = model(img_tensor, verbose=False)
+                # Set size explicitly and use lower confidence threshold
+                results = model(img_tensor, conf=CONF_THRESHOLD, iou=IOU_THRESHOLD, verbose=False)
+            
+            if hasattr(results[0], 'boxes'):
+                box_count = len(results[0].boxes)
+                if box_count > 0:
+                    # Log some example confidence scores to understand what's being detected
+                    conf_scores = [float(box.conf[0]) for box in results[0].boxes[:5]]
+                    logger.info(f"Sample confidence scores: {conf_scores}")
+                
+                logger.info(f"Inference completed, found {box_count} objects before filtering")
+            else:
+                logger.warning("No 'boxes' attribute found in results")
             
             return results
         except Exception as tensor_e:
@@ -202,14 +250,17 @@ def process_detection(img):
             
             # Save the image temporarily
             temp_path = "/tmp/temp_detection_image.jpg"
-            cv2.imwrite(temp_path, padded_img)
+            cv2.imwrite(temp_path, cv2.cvtColor(padded_img, cv2.COLOR_RGB2BGR))
             
             # Use the path-based inference method which might be more stable
-            results = model(temp_path, verbose=False)
+            results = model(temp_path, conf=CONF_THRESHOLD, iou=IOU_THRESHOLD, verbose=False)
             
             # Remove temp file
             import os
             os.remove(temp_path)
+            
+            if hasattr(results[0], 'boxes'):
+                logger.info(f"Path-based inference completed, found {len(results[0].boxes)} objects")
             
             return results
             
@@ -374,16 +425,23 @@ def detect():
                     # Make sure we're using a valid class index
                     class_id = int(r.cls[0])
                     class_name = model.names[class_id] if class_id in model.names else f"unknown_{class_id}"
+                    confidence = float(r.conf[0])
 
                     detections.append({
                         "class": class_name,
-                        "confidence": round(float(r.conf[0]), 4),
+                        "confidence": round(confidence, 4),
                         "bbox": [x1, y1, x2 - x1, y2 - y1],
                         "quadrant": quadrant
                     })
                 except Exception as e:
                     logger.warning(f"Error processing detection box: {e}")
                     continue
+
+        # Log raw detection results before filtering
+        logger.info(f"Raw detections before filtering: {len(detections)}")
+        if len(detections) > 0:
+            for i, det in enumerate(detections[:3]):  # Log first few detections
+                logger.info(f"Detection {i+1}: {det['class']} with confidence {det['confidence']}")
 
         # Filter detections to remove false positives
         filtered_detections = filter_detections(detections)
@@ -400,6 +458,70 @@ def detect():
         })
     except Exception as e:
         logger.error(f"Error in detection endpoint: {e}")
+        return jsonify({'error': str(e)}), 500
+
+# Add a debug endpoint to check if the model can detect a synthetic object
+@app.route('/debug/test-detection', methods=['GET'])
+def test_detection():
+    """Test endpoint that creates an image with known objects to verify detection"""
+    try:
+        # Create a test image with a simple shape
+        test_img = np.zeros((480, 640, 3), dtype=np.uint8)
+        
+        # Add some shapes that should be easy to detect
+        cv2.rectangle(test_img, (100, 100), (300, 300), (0, 255, 0), -1)  # Green rectangle
+        cv2.circle(test_img, (450, 240), 80, (0, 0, 255), -1)  # Red circle
+        
+        # Convert to RGB
+        test_img_rgb = cv2.cvtColor(test_img, cv2.COLOR_BGR2RGB)
+        
+        # Process the test image
+        results = process_detection(test_img_rgb)
+        
+        # Save the test image
+        cv2.imwrite("/tmp/test_detection_image.jpg", test_img)
+        
+        if results is None:
+            return jsonify({
+                "success": False,
+                "message": "Model failed to process test image",
+                "test_image_path": "/tmp/test_detection_image.jpg"
+            })
+        
+        # Check if anything was detected
+        if hasattr(results[0], 'boxes') and len(results[0].boxes) > 0:
+            detections = []
+            for r in results[0].boxes:
+                try:
+                    xyxy = r.xyxy[0].cpu().numpy()
+                    x1, y1, x2, y2 = map(int, xyxy)
+                    
+                    class_id = int(r.cls[0])
+                    class_name = model.names[class_id] if class_id in model.names else f"unknown_{class_id}"
+                    
+                    detections.append({
+                        "class": class_name,
+                        "confidence": float(r.conf[0]),
+                        "bbox": [x1, y1, x2 - x1, y2 - y1]
+                    })
+                except Exception as e:
+                    logger.warning(f"Error processing test detection: {e}")
+            
+            return jsonify({
+                "success": True,
+                "message": f"Model detected {len(detections)} objects in test image",
+                "detections": detections,
+                "test_image_path": "/tmp/test_detection_image.jpg"
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "Model failed to detect objects in test image",
+                "test_image_path": "/tmp/test_detection_image.jpg"
+            })
+            
+    except Exception as e:
+        logger.error(f"Error in test detection endpoint: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/status', methods=['GET'])
