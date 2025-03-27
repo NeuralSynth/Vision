@@ -341,66 +341,118 @@ const WebcamDetection = () => {
   // Draw bounding boxes on canvas - Improved rendering
   useEffect(() => {
     if (!canvasRef.current || !videoRef.current) return;
-    
+
+    const video = videoRef.current;
     const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    // Make sure canvas dimensions match video dimensions
-    if (videoRef.current.videoWidth !== canvas.width || 
-        videoRef.current.videoHeight !== canvas.height) {
-      canvas.width = videoRef.current.videoWidth;
-      canvas.height = videoRef.current.videoHeight;
+
+    // Define the overlay drawing function, which includes drawing gridlines
+    const drawOverlay = () => {
+      // Only proceed if the video has valid dimensions
+      if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
+      // Update canvas dimensions based on video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
       console.log(`Updated canvas dimensions to ${canvas.width}x${canvas.height}`);
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      // Clear previous drawings
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Do not redraw the video frame; let the video element play behind the canvas
+      // ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Draw 3x3 grid overlay
+      drawGrid(ctx, canvas.width, canvas.height);
+
+      // Log detection count before drawing
+      console.log(`Drawing ${detectionResults.length} detection boxes on canvas`);
+
+      // Draw detection boxes (if any)
+      detectionResults.forEach((detection, index) => {
+        const [x, y, width, height] = detection.bbox;
+        console.log(`Detection ${index}: ${detection.class} at (${x},${y},${width},${height})`);
+        try {
+          ctx.strokeStyle = '#00FFFF';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x, y, width, height);
+
+          const text = `${detection.class} (${Math.round(detection.confidence * 100)}%)`;
+          ctx.font = 'bold 16px Arial';
+          const textMetrics = ctx.measureText(text);
+          const labelWidth = Math.max(160, textMetrics.width + 20);
+
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(x, y - 30, labelWidth, 30);
+
+          ctx.strokeStyle = '#00FFFF';
+          ctx.strokeRect(x, y - 30, labelWidth, 30);
+
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillText(text, x + 5, y - 10);
+        } catch (err) {
+          console.error("Error drawing detection:", err);
+        }
+      });
+    };
+
+    // If video dimensions are not yet available, wait for the video to load data
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      video.onloadeddata = () => {
+        drawOverlay();
+      };
+    } else {
+      // Otherwise, immediately draw the overlay
+      drawOverlay();
     }
-    
-    // Clear previous drawings
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw video frame first
-    ctx.drawImage(
-      videoRef.current, 
-      0, 0, 
-      canvas.width, 
-      canvas.height
-    );
-    
-    // Log detection count before drawing
-    console.log(`Drawing ${detectionResults.length} detection boxes on canvas`);
-    
-    // Draw each detection
-    detectionResults.forEach((detection, index) => {
-      const [x, y, width, height] = detection.bbox;
-      console.log(`Detection ${index}: ${detection.class} at (${x},${y},${width},${height})`);
-      
-      try {
-        // Draw bounding box with more vibrant color
-        ctx.strokeStyle = '#00FFFF';
-        ctx.lineWidth = 3;  // Thicker lines
-        ctx.strokeRect(x, y, width, height);
-        
-        // Create more visible label with better contrast
-        const text = `${detection.class} (${Math.round(detection.confidence * 100)}%)`;
-        ctx.font = 'bold 16px Arial';
-        const textMetrics = ctx.measureText(text);
-        const labelWidth = Math.max(160, textMetrics.width + 20);
-        
-        // Draw label background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';  // Dark background for better contrast
-        ctx.fillRect(x, y - 30, labelWidth, 30);
-        
-        // Draw border for label
-        ctx.strokeStyle = '#00FFFF';
-        ctx.strokeRect(x, y - 30, labelWidth, 30);
-        
-        // Draw label text
-        ctx.fillStyle = '#FFFFFF';  // White text for visibility
-        ctx.fillText(text, x + 5, y - 10);
-      } catch (err) {
-        console.error("Error drawing detection:", err);
-      }
-    });
   }, [detectionResults]);
+
+  // Function to draw a 3x3 grid on the canvas
+  const drawGrid = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+    const cellWidth = width / 3;
+    const cellHeight = height / 3;
+  
+    // Use bright white for grid lines with increased thickness
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.lineWidth = 2;
+  
+    // Draw horizontal lines
+    for (let i = 1; i < 3; i++) {
+      const y = i * cellHeight;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+  
+    // Draw vertical lines
+    for (let i = 1; i < 3; i++) {
+      const x = i * cellWidth;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+  
+    // Optionally, add quadrant numbers with a contrasting backdrop
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; // dark background for numbers
+    ctx.font = 'bold 16px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+  
+    const quadrants = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+  
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 3; col++) {
+        const index = row * 3 + col;
+        const centerX = col * cellWidth + cellWidth / 2;
+        const centerY = row * cellHeight + cellHeight / 2;
+        ctx.fillText(quadrants[index], centerX, centerY);
+      }
+    }
+  };
 
   // Toggle detection on/off
   const toggleDetection = () => {

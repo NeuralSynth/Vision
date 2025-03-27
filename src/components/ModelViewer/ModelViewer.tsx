@@ -23,29 +23,35 @@ declare global {
   }
 }
 
-export interface ModelViewerProps {
+// Declare the custom HTML element type
+declare global {
+  interface HTMLElementTagNameMap {
+    'model-viewer': HTMLElement;
+  }
+}
+
+type ModelViewerProps = {
   src: string;
   poster: string;
   alt: string;
   autoRotate?: boolean;
-  // Add any additional props you need, such as className, style, etc.
-}
+  [key: string]: any; // for any additional props
+};
 
-const ModelViewer = forwardRef<HTMLElement, ModelViewerProps>((props, ref) => {
-  const { src, poster, alt, autoRotate } = props;
-
-  return (
-    // The underlying HTML element, note the tag name should match the model-viewer component
-    <model-viewer
-      ref={ref}
-      src={src}
-      poster={poster}
-      alt={alt}
-      auto-rotate={autoRotate}
-      // ...existing props if any...
-    />
-  );
-});
+const ModelViewer = React.forwardRef<HTMLElement, ModelViewerProps>(
+  ({ src, poster, alt, autoRotate, ...rest }, ref) => {
+    return (
+      <model-viewer
+        ref={ref}
+        src={src}
+        poster={poster}
+        alt={alt}
+        {...(autoRotate ? { 'auto-rotate': true } : {})}
+        {...rest}
+      />
+    );
+  }
+);
 
 ModelViewer.displayName = 'ModelViewer';
 
