@@ -1,13 +1,10 @@
-# Ignore YOLO weights
-*.weights
+node_modules/
+* text=auto
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.pt
 __pycache__/
-*.pyc
-.env
-.venv
-env/
-venv/
-ENV/
-build/
-dist/
-*.egg-info/
-.DS_Store 
+model/
